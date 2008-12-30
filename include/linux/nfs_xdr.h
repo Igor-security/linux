@@ -136,6 +136,7 @@ struct nfs_openargs {
 	const struct nfs_server *server;	 /* Needed for ID mapping */
 	const u32 *		bitmask;
 	__u32			claim;
+	const struct nfs4_label *label;
 };
 
 struct nfs_openres {
@@ -354,6 +355,7 @@ struct nfs_setattrargs {
 	struct iattr *                  iap;
 	const struct nfs_server *	server; /* Needed for name mapping */
 	const u32 *			bitmask;
+	const struct nfs4_label *	label;
 };
 
 struct nfs_setaclargs {
@@ -578,6 +580,7 @@ struct nfs4_create_arg {
 	const struct iattr *		attrs;
 	const struct nfs_fh *		dir_fh;
 	const u32 *			bitmask;
+	const struct nfs4_label *	label;
 };
 
 struct nfs4_create_res {

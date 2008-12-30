@@ -112,6 +112,12 @@ struct nfs4_acl {
 	struct nfs4_ace	aces[0];
 };
 
+struct nfs4_label {
+	void		*label;
+	u32		len;
+};
+
+
 typedef struct { char data[NFS4_VERIFIER_SIZE]; } nfs4_verifier;
 typedef struct { char data[NFS4_STATEID_SIZE]; } nfs4_stateid;
 
