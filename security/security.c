@@ -865,6 +865,12 @@ int security_netlink_recv(struct sk_buff *skb, int cap)
 }
 EXPORT_SYMBOL(security_netlink_recv);
 
+int security_ismaclabel(const char *name)
+{
+	return security_ops->ismaclabel(name);
+}
+EXPORT_SYMBOL(security_ismaclabel);
+
 int security_secid_to_secctx(u32 secid, char **secdata, u32 *seclen)
 {
 	return security_ops->secid_to_secctx(secid, secdata, seclen);

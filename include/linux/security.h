@@ -1238,6 +1238,10 @@ static inline void security_free_mnt_opts(struct security_mnt_opts *opts)
  *	@pages contains the number of pages.
  *	Return 0 if permission is granted.
  *
+ * @ismaclabel:
+ * 	Check if the extended attribute specified by @name represents a MAC label.
+ * 	@name full extended attribute name to check against LSM as a MAC label.
+ *
  * @secid_to_secctx:
  *	Convert secid to security context.
  *	@secid contains the security ID.
@@ -1505,6 +1509,7 @@ struct security_operations {
 
 	int (*getprocattr) (struct task_struct *p, char *name, char **value);
 	int (*setprocattr) (struct task_struct *p, char *name, void *value, size_t size);
+	int (*ismaclabel) (const char * name);
 	int (*secid_to_secctx) (u32 secid, char **secdata, u32 *seclen);
 	int (*secctx_to_secid) (const char *secdata, u32 seclen, u32 *secid);
 	void (*release_secctx) (char *secdata, u32 seclen);
@@ -1752,6 +1757,7 @@ int security_getprocattr(struct task_struct *p, char *name, char **value);
 int security_setprocattr(struct task_struct *p, char *name, void *value, size_t size);
 int security_netlink_send(struct sock *sk, struct sk_buff *skb);
 int security_netlink_recv(struct sk_buff *skb, int cap);
+int security_ismaclabel(const char *name);
 int security_secid_to_secctx(u32 secid, char **secdata, u32 *seclen);
 int security_secctx_to_secid(const char *secdata, u32 seclen, u32 *secid);
 void security_release_secctx(char *secdata, u32 seclen);
@@ -2475,6 +2481,11 @@ static inline int security_netlink_send(struct sock *sk, struct sk_buff *skb)
 static inline int security_netlink_recv(struct sk_buff *skb, int cap)
 {
 	return cap_netlink_recv(skb, cap);
+}
+
+static inline int security_ismaclabel(const char *name)
+{
+	return 0;
 }
 
 static inline int security_secid_to_secctx(u32 secid, char **secdata, u32 *seclen)
