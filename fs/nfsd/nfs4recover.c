@@ -238,8 +238,10 @@ nfsd4_list_rec_dir(struct dentry *dir, recdir_func *f)
 	filp = dentry_open(dget(dir), mntget(rec_dir.mnt), O_RDONLY,
 			   current_cred());
 	status = PTR_ERR(filp);
-	if (IS_ERR(filp))
-		goto out;
+	if (IS_ERR(filp)) {
+		nfs4_reset_user(uid, gid);
+		return PTR_ERR(filp);
+	}
 	INIT_LIST_HEAD(dentries);
 	status = vfs_readdir(filp, nfsd4_build_dentrylist, &dla);
 	fput(filp);
