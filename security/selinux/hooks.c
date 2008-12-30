@@ -89,7 +89,7 @@
 #define XATTR_SELINUX_SUFFIX "selinux"
 #define XATTR_NAME_SELINUX XATTR_SECURITY_PREFIX XATTR_SELINUX_SUFFIX
 
-#define NUM_SEL_MNT_OPTS 4
+#define NUM_SEL_MNT_OPTS 5
 
 extern unsigned int policydb_loaded_version;
 extern int selinux_nlmsg_lookup(u16 sclass, u16 nlmsg_type, u32 *perm);
@@ -331,13 +331,14 @@ extern int ss_initialized;
 
 /* The file system's label must be initialized prior to use. */
 
-static char *labeling_behaviors[6] = {
+static char *labeling_behaviors[7] = {
 	"uses xattr",
 	"uses transition SIDs",
 	"uses task SIDs",
 	"uses genfs_contexts",
 	"not configured for labeling",
 	"uses mountpoint labeling",
+	"uses native labels",
 };
 
 static int inode_doinit_with_dentry(struct inode *inode, struct dentry *opt_dentry);
@@ -353,6 +354,7 @@ enum {
 	Opt_fscontext = 2,
 	Opt_defcontext = 3,
 	Opt_rootcontext = 4,
+	Opt_native_labels = 5,
 };
 
 static const match_table_t tokens = {
@@ -360,6 +362,7 @@ static const match_table_t tokens = {
 	{Opt_fscontext, FSCONTEXT_STR "%s"},
 	{Opt_defcontext, DEFCONTEXT_STR "%s"},
 	{Opt_rootcontext, ROOTCONTEXT_STR "%s"},
+	{Opt_native_labels, NATIVELABELS_STR},
 	{Opt_error, NULL},
 };
 
@@ -549,6 +552,10 @@ static int selinux_get_mnt_opts(const struct super_block *sb,
 		opts->mnt_opts[i] = context;
 		opts->mnt_opts_flags[i++] = ROOTCONTEXT_MNT;
 	}
+	if (sbsec->flags == NATIVE_LABELS_MNT) {
+		opts->mnt_opts[i] = NULL;
+		opts->mnt_opts_flags[i++] = NATIVE_LABELS_MNT;
+	}
 
 	BUG_ON(i != opts->num_mnt_opts);
 
@@ -637,12 +644,16 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 	 */
 	for (i = 0; i < num_opts; i++) {
 		u32 sid;
+		if (flags[i] == NATIVE_LABELS_MNT) {
+			sbsec->flags |= NATIVE_LABELS_MNT;
+			continue;
+		}
 		rc = security_context_to_sid(mount_options[i],
-					     strlen(mount_options[i]), &sid);
+				strlen(mount_options[i]), &sid);
 		if (rc) {
 			printk(KERN_WARNING "SELinux: security_context_to_sid"
-			       "(%s) failed for (dev %s, type %s) errno=%d\n",
-			       mount_options[i], sb->s_id, name, rc);
+					"(%s) failed for (dev %s, type %s) errno=%d\n",
+					mount_options[i], sb->s_id, name, rc);
 			goto out;
 		}
 		switch (flags[i]) {
@@ -701,14 +712,15 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 	if (strcmp(sb->s_type->name, "proc") == 0)
 		sbsec->proc = 1;
 
+	if (!sbsec->behavior) {
 	/* Determine the labeling behavior to use for this filesystem type. */
-	rc = security_fs_use(sbsec->proc ? "proc" : sb->s_type->name, &sbsec->behavior, &sbsec->sid);
-	if (rc) {
-		printk(KERN_WARNING "%s: security_fs_use(%s) returned %d\n",
-		       __func__, sb->s_type->name, rc);
-		goto out;
+		rc = security_fs_use(sbsec->proc ? "proc" : sb->s_type->name, &sbsec->behavior, &sbsec->sid);
+		if (rc) {
+			printk(KERN_WARNING "%s: security_fs_use(%s) returned %d\n",
+					__func__, sb->s_type->name, rc);
+			goto out;
+		}
 	}
-
 	/* sets the context of the superblock for the fs being mounted. */
 	if (fscontext_sid) {
 		rc = may_context_mount_sb_relabel(fscontext_sid, sbsec, cred);
@@ -723,6 +735,11 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 	 * sets the label used on all file below the mountpoint, and will set
 	 * the superblock context if not already set.
 	 */
+	/* NATIVE_LABELS can be overridden by 'context=' mounts, below. */
+	if (sbsec->flags & NATIVE_LABELS_MNT) {
+		sbsec->behavior = SECURITY_FS_USE_NATIVE;
+	}
+
 	if (context_sid) {
 		if (!fscontext_sid) {
 			rc = may_context_mount_sb_relabel(context_sid, sbsec,
@@ -741,6 +758,7 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 
 		sbsec->mntpoint_sid = context_sid;
 		sbsec->behavior = SECURITY_FS_USE_MNTPOINT;
+		sbsec->flags &= ~NATIVE_LABELS_MNT; /* Exclusive */
 	}
 
 	if (rootcontext_sid) {
@@ -754,7 +772,8 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 	}
 
 	if (defcontext_sid) {
-		if (sbsec->behavior != SECURITY_FS_USE_XATTR) {
+		if (sbsec->behavior != SECURITY_FS_USE_XATTR &&
+			sbsec->behavior != SECURITY_FS_USE_NATIVE) {
 			rc = -EINVAL;
 			printk(KERN_WARNING "SELinux: defcontext option is "
 			       "invalid for this filesystem type\n");
@@ -851,6 +870,7 @@ static int selinux_parse_opts_str(char *options,
 	char *p;
 	char *context = NULL, *defcontext = NULL;
 	char *fscontext = NULL, *rootcontext = NULL;
+	int native_labels = 0;
 	int rc, num_mnt_opts = 0;
 
 	opts->num_mnt_opts = 0;
@@ -918,9 +938,15 @@ static int selinux_parse_opts_str(char *options,
 			}
 			break;
 
+		case Opt_native_labels:
+			printk("%s() got Opt_native_labels\n", __func__);
+			native_labels = 1;
+			break;
+
+
 		default:
 			rc = -EINVAL;
-			printk(KERN_WARNING "SELinux:  unknown mount option\n");
+			printk(KERN_WARNING "SELinux: unknown mount option \"%s\"\n", p);
 			goto out_err;
 
 		}
@@ -952,6 +978,10 @@ static int selinux_parse_opts_str(char *options,
 	if (defcontext) {
 		opts->mnt_opts[num_mnt_opts] = defcontext;
 		opts->mnt_opts_flags[num_mnt_opts++] = DEFCONTEXT_MNT;
+	}
+	if (native_labels) {
+		opts->mnt_opts[num_mnt_opts] = NULL;
+		opts->mnt_opts_flags[num_mnt_opts++] = NATIVE_LABELS_MNT;
 	}
 
 	opts->num_mnt_opts = num_mnt_opts;
@@ -999,7 +1029,12 @@ static void selinux_write_opts(struct seq_file *m,
 	char *prefix;
 
 	for (i = 0; i < opts->num_mnt_opts; i++) {
-		char *has_comma = strchr(opts->mnt_opts[i], ',');
+		char *has_comma;
+
+		if (opts->mnt_opts[i])
+			has_comma = strchr(opts->mnt_opts[i], ',');
+		else
+			has_comma = NULL;
 
 		switch (opts->mnt_opts_flags[i]) {
 		case CONTEXT_MNT:
@@ -1014,6 +1049,10 @@ static void selinux_write_opts(struct seq_file *m,
 		case DEFCONTEXT_MNT:
 			prefix = DEFCONTEXT_STR;
 			break;
+		case NATIVE_LABELS_MNT:
+			seq_putc(m, ',');
+			seq_puts(m, NATIVELABELS_STR);
+			continue;
 		default:
 			BUG();
 		};
@@ -1221,6 +1260,8 @@ static int inode_doinit_with_dentry(struct inode *inode, struct dentry *opt_dent
 	}
 
 	switch (sbsec->behavior) {
+	case SECURITY_FS_USE_NATIVE:
+		break;
 	case SECURITY_FS_USE_XATTR:
 		if (!inode->i_op->getxattr) {
 			isec->sid = sbsec->def_sid;
@@ -2397,7 +2438,8 @@ static inline int selinux_option(char *option, int len)
 	return (match_prefix(CONTEXT_STR, sizeof(CONTEXT_STR)-1, option, len) ||
 		match_prefix(FSCONTEXT_STR, sizeof(FSCONTEXT_STR)-1, option, len) ||
 		match_prefix(DEFCONTEXT_STR, sizeof(DEFCONTEXT_STR)-1, option, len) ||
-		match_prefix(ROOTCONTEXT_STR, sizeof(ROOTCONTEXT_STR)-1, option, len));
+		match_prefix(ROOTCONTEXT_STR, sizeof(ROOTCONTEXT_STR)-1, option, len) ||
+		match_prefix(NATIVELABELS_STR, sizeof(NATIVELABELS_STR)-1, option, len));
 }
 
 static inline void take_option(char **to, char *from, int *first, int len)
