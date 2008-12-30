@@ -346,6 +346,13 @@ void security_inode_free(struct inode *inode)
 	security_ops->inode_free_security(inode);
 }
 
+int security_dentry_init_security (struct dentry *dentry, int mode,
+				   void **ctx, u32 *ctxlen)
+{
+	return security_ops->dentry_init_security (dentry, mode, ctx, ctxlen);
+}
+EXPORT_SYMBOL(security_dentry_init_security);
+
 int security_inode_init_security(struct inode *inode, struct inode *dir,
 				  char **name, void **value, size_t *len)
 {
