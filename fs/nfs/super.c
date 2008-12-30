@@ -75,6 +75,7 @@ enum {
 	Opt_acl, Opt_noacl,
 	Opt_rdirplus, Opt_nordirplus,
 	Opt_sharecache, Opt_nosharecache,
+	Opt_security_label, Opt_nosecurity_label,
 
 	/* Mount options that take integer arguments */
 	Opt_port,
@@ -129,6 +130,8 @@ static const match_table_t nfs_mount_option_tokens = {
 	{ Opt_nordirplus, "nordirplus" },
 	{ Opt_sharecache, "sharecache" },
 	{ Opt_nosharecache, "nosharecache" },
+	{ Opt_security_label, "security_label" },
+	{ Opt_nosecurity_label, "nosecurity_label" },
 
 	{ Opt_port, "port=%u" },
 	{ Opt_rsize, "rsize=%u" },
@@ -1032,6 +1035,12 @@ static int nfs_parse_mount_options(char *raw,
 			break;
 		case Opt_nosharecache:
 			mnt->flags |= NFS_MOUNT_UNSHARED;
+			break;
+		case Opt_nosecurity_label:
+			mnt->flags &= ~NFS4_MOUNT_SECURITY_LABEL;
+			break;
+		case Opt_security_label:
+			mnt->flags |= NFS4_MOUNT_SECURITY_LABEL;
 			break;
 
 		/*

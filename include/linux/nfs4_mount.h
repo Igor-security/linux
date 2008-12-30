@@ -17,6 +17,7 @@
  * but here they are anyway.
  */
 #define NFS4_MOUNT_VERSION	1
+#define NFS4_MAX_CONTEXT_LEN	4096
 
 struct nfs_string {
 	unsigned int len;
@@ -53,6 +54,8 @@ struct nfs4_mount_data {
 	/* Pseudo-flavours to use for authentication. See RFC2623 */
 	int auth_flavourlen;			/* 1 */
 	int __user *auth_flavours;		/* 1 */
+
+	char context[NFS4_MAX_CONTEXT_LEN + 1];  /* 2 */
 };
 
 /* bits in the flags field */
@@ -66,6 +69,7 @@ struct nfs4_mount_data {
 #define NFS4_MOUNT_NOAC		0x0020	/* 1 */
 #define NFS4_MOUNT_STRICTLOCK	0x1000	/* 1 */
 #define NFS4_MOUNT_UNSHARED	0x8000	/* 1 */
-#define NFS4_MOUNT_FLAGMASK	0x9033
+#define NFS4_MOUNT_SECURITY_LABEL 0x10000 /* 2 */
+#define NFS4_MOUNT_FLAGMASK	0x19033
 
 #endif
