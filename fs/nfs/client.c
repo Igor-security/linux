@@ -901,6 +901,8 @@ struct nfs_server *nfs_create_server(const struct nfs_parsed_mount_data *data,
 	struct nfs_fattr fattr;
 	int error;
 
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
+
 	server = nfs_alloc_server();
 	if (!server)
 		return ERR_PTR(-ENOMEM);
@@ -951,10 +953,12 @@ struct nfs_server *nfs_create_server(const struct nfs_parsed_mount_data *data,
 	spin_unlock(&nfs_client_lock);
 
 	server->mount_time = jiffies;
+	nfs_fattr_fini(&fattr);
 	return server;
 
 error:
 	nfs_free_server(server);
+	nfs_fattr_fini(&fattr);
 	return ERR_PTR(error);
 }
 
@@ -1108,6 +1112,8 @@ struct nfs_server *nfs4_create_server(const struct nfs_parsed_mount_data *data,
 
 	dprintk("--> nfs4_create_server()\n");
 
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
+
 	server = nfs_alloc_server();
 	if (!server)
 		return ERR_PTR(-ENOMEM);
@@ -1148,11 +1154,13 @@ struct nfs_server *nfs4_create_server(const struct nfs_parsed_mount_data *data,
 	spin_unlock(&nfs_client_lock);
 
 	server->mount_time = jiffies;
+	nfs_fattr_fini(&fattr);
 	dprintk("<-- nfs4_create_server() = %p\n", server);
 	return server;
 
 error:
 	nfs_free_server(server);
+	nfs_fattr_fini(&fattr);
 	dprintk("<-- nfs4_create_server() = error %d\n", error);
 	return ERR_PTR(error);
 }
@@ -1169,6 +1177,8 @@ struct nfs_server *nfs4_create_referral_server(struct nfs_clone_mount *data,
 	int error;
 
 	dprintk("--> nfs4_create_referral_server()\n");
+
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
 
 	server = nfs_alloc_server();
 	if (!server)
@@ -1226,10 +1236,12 @@ struct nfs_server *nfs4_create_referral_server(struct nfs_clone_mount *data,
 	server->mount_time = jiffies;
 
 	dprintk("<-- nfs_create_referral_server() = %p\n", server);
+	nfs_fattr_fini(&fattr);
 	return server;
 
 error:
 	nfs_free_server(server);
+	nfs_fattr_fini(&fattr);
 	dprintk("<-- nfs4_create_referral_server() = error %d\n", error);
 	return ERR_PTR(error);
 }
@@ -1250,6 +1262,8 @@ struct nfs_server *nfs_clone_server(struct nfs_server *source,
 	dprintk("--> nfs_clone_server(,%llx:%llx,)\n",
 		(unsigned long long) fattr->fsid.major,
 		(unsigned long long) fattr->fsid.minor);
+
+	memset(&fattr_fsinfo, 0, sizeof(struct nfs_fattr));
 
 	server = nfs_alloc_server();
 	if (!server)
@@ -1293,11 +1307,13 @@ struct nfs_server *nfs_clone_server(struct nfs_server *source,
 
 	server->mount_time = jiffies;
 
+	nfs_fattr_fini(&fattr_fsinfo);
 	dprintk("<-- nfs_clone_server() = %p\n", server);
 	return server;
 
 out_free_server:
 	nfs_free_server(server);
+	nfs_fattr_fini(&fattr_fsinfo);
 	dprintk("<-- nfs_clone_server() = error %d\n", error);
 	return ERR_PTR(error);
 }

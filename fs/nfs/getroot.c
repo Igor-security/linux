@@ -31,7 +31,6 @@
 #include <linux/vfs.h>
 #include <linux/namei.h>
 #include <linux/mnt_namespace.h>
-#include <linux/security.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
@@ -84,6 +83,8 @@ struct dentry *nfs_get_root(struct super_block *sb, struct nfs_fh *mntfh)
 	struct inode *inode;
 	int error;
 
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
+
 	/* get the actual root for this mount */
 	fsinfo.fattr = &fattr;
 
@@ -118,6 +119,7 @@ struct dentry *nfs_get_root(struct super_block *sb, struct nfs_fh *mntfh)
 	if (!mntroot->d_op)
 		mntroot->d_op = server->nfs_client->rpc_ops->dentry_ops;
 
+	nfs_fattr_fini(&fattr);
 	return mntroot;
 }
 
@@ -142,6 +144,14 @@ int nfs4_path_walk(struct nfs_server *server,
 
 	dprintk("--> nfs4_path_walk(,,%s)\n", path);
 
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
+#ifdef CONFIG_NFS_V4_SECURITY_LABEL
+	/* Unconditional, no server caps yet. */
+	ret = nfs_fattr_alloc(&fattr, GFP_KERNEL);
+	if (ret < 0)
+		return ret;
+#endif
+
 	fsinfo.fattr = &fattr;
 	nfs_fattr_init(&fattr);
 
@@ -153,12 +163,14 @@ int nfs4_path_walk(struct nfs_server *server,
 	ret = server->nfs_client->rpc_ops->getroot(server, mntfh, &fsinfo);
 	if (ret < 0) {
 		dprintk("nfs4_get_root: getroot error = %d\n", -ret);
+		nfs_fattr_fini(&fattr);
 		return ret;
 	}
 
 	if (fattr.type != NFDIR) {
 		printk(KERN_ERR "nfs4_get_root:"
 		       " getroot encountered non-directory\n");
+		nfs_fattr_fini(&fattr);
 		return -ENOTDIR;
 	}
 
@@ -166,6 +178,7 @@ int nfs4_path_walk(struct nfs_server *server,
 	if (fattr.valid & NFS_ATTR_FATTR_V4_REFERRAL) {
 		printk(KERN_ERR "nfs4_get_root:"
 		       " getroot obtained referral\n");
+		nfs_fattr_fini(&fattr);
 		return -EREMOTE;
 	}
 
@@ -198,6 +211,7 @@ eat_dot_dir:
 	    ) {
 		printk(KERN_ERR "nfs4_get_root:"
 		       " Mount path contains reference to \"..\"\n");
+		nfs_fattr_fini(&fattr);
 		return -EINVAL;
 	}
 
@@ -206,16 +220,28 @@ eat_dot_dir:
 
 	dprintk("LookupFH: %*.*s [%s]\n", name.len, name.len, name.name, path);
 
+	nfs_fattr_fini(&fattr);
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
+#ifdef CONFIG_NFS_V4_SECURITY_LABEL
+	if (server->caps & NFS_CAP_SECURITY_LABEL) {
+		ret = nfs_fattr_alloc(&fattr, GFP_KERNEL);
+		if (ret < 0)
+			return ret;
+	}
+#endif
+
 	ret = server->nfs_client->rpc_ops->lookupfh(server, &lastfh, &name,
 						    mntfh, &fattr);
 	if (ret < 0) {
 		dprintk("nfs4_get_root: getroot error = %d\n", -ret);
+		nfs_fattr_fini(&fattr);
 		return ret;
 	}
 
 	if (fattr.type != NFDIR) {
 		printk(KERN_ERR "nfs4_get_root:"
 		       " lookupfh encountered non-directory\n");
+		nfs_fattr_fini(&fattr);
 		return -ENOTDIR;
 	}
 
@@ -223,6 +249,7 @@ eat_dot_dir:
 	if (fattr.valid & NFS_ATTR_FATTR_V4_REFERRAL) {
 		printk(KERN_ERR "nfs4_get_root:"
 		       " lookupfh obtained referral\n");
+		nfs_fattr_fini(&fattr);
 		return -EREMOTE;
 	}
 
@@ -230,6 +257,7 @@ eat_dot_dir:
 
 path_walk_complete:
 	memcpy(&server->fsid, &fattr.fsid, sizeof(server->fsid));
+	nfs_fattr_fini(&fattr);
 	dprintk("<-- nfs4_path_walk() = 0\n");
 	return 0;
 }
@@ -255,18 +283,34 @@ struct dentry *nfs4_get_root(struct super_block *sb, struct nfs_fh *mntfh)
 		return ERR_PTR(error);
 	}
 
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
+#ifdef CONFIG_NFS_V4_SECURITY_LABEL
+	if (server->caps & NFS_CAP_SECURITY_LABEL) {
+		error = nfs_fattr_alloc(&fattr, GFP_KERNEL);
+		if (error < 0) {
+			dprintk("nfs_get_root: nfs_fattr_alloc error = %d\n",
+					error);
+			return ERR_PTR(error);
+		}
+	}
+#endif
+
 	/* get the actual root for this mount */
 	error = server->nfs_client->rpc_ops->getattr(server, mntfh, &fattr);
 	if (error < 0) {
+		nfs_fattr_fini(&fattr);
 		dprintk("nfs_get_root: getattr error = %d\n", -error);
 		return ERR_PTR(error);
 	}
 
 	inode = nfs_fhget(sb, mntfh, &fattr);
 	if (IS_ERR(inode)) {
+		nfs_fattr_fini(&fattr);
 		dprintk("nfs_get_root: get root inode failed\n");
 		return ERR_CAST(inode);
 	}
+
+	nfs_fattr_fini(&fattr);
 
 	error = nfs_superblock_set_dummy_root(sb, inode);
 	if (error != 0)

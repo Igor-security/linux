@@ -216,12 +216,14 @@ nfs_proc_create(struct inode *dir, struct dentry *dentry, struct iattr *sattr,
 	};
 	int			status;
 
-	nfs_fattr_init(&fattr);
 	dprintk("NFS call  create %s\n", dentry->d_name.name);
 	status = rpc_call_sync(NFS_CLIENT(dir), &msg, 0);
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
+	nfs_fattr_init(&fattr);
 	nfs_mark_for_revalidate(dir);
 	if (status == 0)
 		status = nfs_instantiate(dentry, &fhandle, &fattr);
+	nfs_fattr_fini(&fattr);
 	dprintk("NFS reply create: %d\n", status);
 	return status;
 }
@@ -263,6 +265,7 @@ nfs_proc_mknod(struct inode *dir, struct dentry *dentry, struct iattr *sattr,
 		sattr->ia_size = new_encode_dev(rdev);/* get out your barf bag */
 	}
 
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
 	nfs_fattr_init(&fattr);
 	status = rpc_call_sync(NFS_CLIENT(dir), &msg, 0);
 	nfs_mark_for_revalidate(dir);
@@ -274,6 +277,7 @@ nfs_proc_mknod(struct inode *dir, struct dentry *dentry, struct iattr *sattr,
 	}
 	if (status == 0)
 		status = nfs_instantiate(dentry, &fhandle, &fattr);
+	nfs_fattr_fini(&fattr);
 	dprintk("NFS reply mknod: %d\n", status);
 	return status;
 }
@@ -386,6 +390,8 @@ nfs_proc_symlink(struct inode *dir, struct dentry *dentry, struct page *page,
 
 	dprintk("NFS call  symlink %s\n", dentry->d_name.name);
 
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
+
 	status = rpc_call_sync(NFS_CLIENT(dir), &msg, 0);
 	nfs_mark_for_revalidate(dir);
 
@@ -400,6 +406,7 @@ nfs_proc_symlink(struct inode *dir, struct dentry *dentry, struct page *page,
 		status = nfs_instantiate(dentry, &fhandle, &fattr);
 	}
 
+	nfs_fattr_fini(&fattr);
 	dprintk("NFS reply symlink: %d\n", status);
 	return status;
 }
@@ -427,11 +434,14 @@ nfs_proc_mkdir(struct inode *dir, struct dentry *dentry, struct iattr *sattr)
 	int			status;
 
 	dprintk("NFS call  mkdir %s\n", dentry->d_name.name);
+
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
 	nfs_fattr_init(&fattr);
 	status = rpc_call_sync(NFS_CLIENT(dir), &msg, 0);
 	nfs_mark_for_revalidate(dir);
 	if (status == 0)
 		status = nfs_instantiate(dentry, &fhandle, &fattr);
+	nfs_fattr_fini(&fattr);
 	dprintk("NFS reply mkdir: %d\n", status);
 	return status;
 }

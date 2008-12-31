@@ -59,6 +59,7 @@
 #include <linux/nfs_fs_sb.h>
 
 #include <linux/mempool.h>
+#include <linux/security.h>
 
 /*
  * These are the default flags for swap requests
@@ -349,6 +350,29 @@ extern void nfs_fattr_init(struct nfs_fattr *fattr);
 /* linux/net/ipv4/ipconfig.c: trims ip addr off front of name, too. */
 extern __be32 root_nfs_parse_addr(char *name); /*__init*/
 extern unsigned long nfs_inc_attr_generation_counter(void);
+
+#ifdef CONFIG_SECURITY
+
+static inline int nfs_fattr_alloc(struct nfs_fattr *fattr, gfp_t flags)
+{
+	fattr->label = kzalloc(NFS4_MAXLABELLEN, flags);
+	if (fattr->label == NULL)
+		return -ENOMEM;
+	fattr->label_len = NFS4_MAXLABELLEN;
+	return 0;
+}
+
+static inline void nfs_fattr_fini(struct nfs_fattr *fattr)
+{
+	security_release_secctx(fattr->label, fattr->label_len);
+	fattr->label = NULL;
+	fattr->label_len = 0;
+}
+
+#else
+static inline int nfs_fattr_alloc(struct nfs_fattr *fattr, gfp_t flags) {}
+static inline void nfs_fattr_fini(struct nfs_fattr *fattr) {}
+#endif
 
 /*
  * linux/fs/nfs/file.c

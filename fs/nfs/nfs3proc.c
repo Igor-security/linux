@@ -294,6 +294,9 @@ static int nfs3_do_create(struct inode *dir, struct dentry *dentry, struct nfs3_
 
 static void nfs3_free_createdata(struct nfs3_createdata *data)
 {
+
+	nfs_fattr_fini(data->res.fattr);
+	nfs_fattr_fini(data->res.dir_attr);
 	kfree(data);
 }
 
@@ -420,6 +423,7 @@ nfs3_proc_unlink_done(struct rpc_task *task, struct inode *dir)
 		return 0;
 	res = task->tk_msg.rpc_resp;
 	nfs_post_op_update_inode(dir, &res->dir_attr);
+	nfs_fattr_fini(&res->dir_attr);
 	return 1;
 }
 
@@ -617,6 +621,9 @@ nfs3_proc_readdir(struct dentry *dentry, struct rpc_cred *cred,
 
 	dprintk("NFS call  readdir%s %d\n",
 			plus? "plus" : "", (unsigned int) cookie);
+
+
+	memset(&dir_attr, 0, sizeof(struct nfs_fattr));
 
 	nfs_fattr_init(&dir_attr);
 	status = rpc_call_sync(NFS_CLIENT(dir), &msg, 0);

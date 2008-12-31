@@ -557,6 +557,7 @@ static int nfs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 	my_entry.eof = 0;
 	my_entry.fh = &fh;
 	my_entry.fattr = &fattr;
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
 	nfs_fattr_init(&fattr);
 	desc->entry = &my_entry;
 
@@ -594,6 +595,7 @@ static int nfs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 			res = 0;
 			break;
 		}
+		nfs_fattr_fini(&fattr);
 	}
 out:
 	nfs_unblock_sillyrename(dentry);
@@ -777,9 +779,11 @@ static int nfs_lookup_revalidate(struct dentry * dentry, struct nameidata *nd)
 	struct inode *dir;
 	struct inode *inode;
 	struct dentry *parent;
-	int error;
+	int error = 0;
 	struct nfs_fh fhandle;
 	struct nfs_fattr fattr;
+
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
 
 	parent = dget_parent(dentry);
 	dir = parent->d_inode;
@@ -809,6 +813,14 @@ static int nfs_lookup_revalidate(struct dentry * dentry, struct nameidata *nd)
 	if (NFS_STALE(inode))
 		goto out_bad;
 
+#ifdef CONFIG_NFS_V4_SECURITY_LABEL
+	if (nfs_server_capable(dir, NFS_CAP_SECURITY_LABEL)) {
+		error = nfs_fattr_alloc(&fattr, GFP_NOWAIT);
+		if (error < 0)
+			goto out_bad;
+	}
+#endif
+
 	error = NFS_PROTO(dir)->lookup(dir, &dentry->d_name, &fhandle, &fattr);
 	if (error)
 		goto out_bad;
@@ -820,6 +832,7 @@ static int nfs_lookup_revalidate(struct dentry * dentry, struct nameidata *nd)
 	nfs_set_verifier(dentry, nfs_save_change_attribute(dir));
  out_valid:
 	dput(parent);
+	nfs_fattr_fini(&fattr);
 	dfprintk(LOOKUPCACHE, "NFS: %s(%s/%s) is valid\n",
 			__func__, dentry->d_parent->d_name.name,
 			dentry->d_name.name);
@@ -838,6 +851,7 @@ out_zap_parent:
 	}
 	d_drop(dentry);
 	dput(parent);
+	nfs_fattr_fini(&fattr);
 	dfprintk(LOOKUPCACHE, "NFS: %s(%s/%s) is invalid\n",
 			__func__, dentry->d_parent->d_name.name,
 			dentry->d_name.name);
@@ -906,13 +920,15 @@ static struct dentry *nfs_lookup(struct inode *dir, struct dentry * dentry, stru
 	struct dentry *res;
 	struct dentry *parent;
 	struct inode *inode = NULL;
-	int error;
+	int error = 0;
 	struct nfs_fh fhandle;
 	struct nfs_fattr fattr;
 
 	dfprintk(VFS, "NFS: lookup(%s/%s)\n",
 		dentry->d_parent->d_name.name, dentry->d_name.name);
 	nfs_inc_stats(dir, NFSIOS_VFSLOOKUP);
+
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
 
 	res = ERR_PTR(-ENAMETOOLONG);
 	if (dentry->d_name.len > NFS_SERVER(dir)->namelen)
@@ -930,6 +946,14 @@ static struct dentry *nfs_lookup(struct inode *dir, struct dentry * dentry, stru
 		res = NULL;
 		goto out;
 	}
+
+#ifdef CONFIG_NFS_V4_SECURITY_LABEL
+	if (nfs_server_capable(dir, NFS_CAP_SECURITY_LABEL)) {
+		error = nfs_fattr_alloc(&fattr, GFP_NOWAIT);
+		if (error < 0)
+			goto out;
+	}
+#endif
 
 	parent = dentry->d_parent;
 	/* Protect against concurrent sillydeletes */
@@ -957,6 +981,8 @@ no_entry:
 out_unblock_sillyrename:
 	nfs_unblock_sillyrename(parent);
 out:
+	/* Label will give 'unused' warning on 'no_entry' case. */
+	nfs_fattr_fini(&fattr);
 	return res;
 }
 
@@ -1222,6 +1248,7 @@ static int nfs_create(struct inode *dir, struct dentry *dentry, int mode,
 	dfprintk(VFS, "NFS: create(%s/%ld), %s\n",
 			dir->i_sb->s_id, dir->i_ino, dentry->d_name.name);
 
+	memset(&attr, 0, sizeof(struct iattr));
 	attr.ia_mode = mode;
 	attr.ia_valid = ATTR_MODE;
 
@@ -1252,6 +1279,7 @@ nfs_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t rdev)
 	if (!new_valid_dev(rdev))
 		return -EINVAL;
 
+	memset(&attr, 0, sizeof(struct iattr));
 	attr.ia_mode = mode;
 	attr.ia_valid = ATTR_MODE;
 
@@ -1275,6 +1303,7 @@ static int nfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	dfprintk(VFS, "NFS: mkdir(%s/%ld), %s\n",
 			dir->i_sb->s_id, dir->i_ino, dentry->d_name.name);
 
+	memset(&attr, 0, sizeof(struct iattr));
 	attr.ia_valid = ATTR_MODE;
 	attr.ia_mode = mode | S_IFDIR;
 
@@ -1484,6 +1513,7 @@ static int nfs_symlink(struct inode *dir, struct dentry *dentry, const char *sym
 	if (pathlen > PAGE_SIZE)
 		return -ENAMETOOLONG;
 
+	memset(&attr, 0, sizeof(struct iattr));
 	attr.ia_mode = S_IFLNK | S_IRWXUGO;
 	attr.ia_valid = ATTR_MODE;
 

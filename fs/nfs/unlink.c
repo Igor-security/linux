@@ -123,11 +123,10 @@ static int nfs_do_call_unlink(struct dentry *parent, struct inode *dir, struct n
 	};
 	struct rpc_task *task;
 	struct dentry *alias;
+	int ret = 0;
 
 	alias = d_lookup(parent, &data->args.name);
 	if (alias != NULL) {
-		int ret = 0;
-
 		/*
 		 * Hey, we raced with lookup... See if we need to transfer
 		 * the sillyrename information to the aliased dentry.
@@ -150,9 +149,17 @@ static int nfs_do_call_unlink(struct dentry *parent, struct inode *dir, struct n
 		nfs_dec_sillycount(dir);
 		return 0;
 	}
+	memset(&data->res.dir_attr, 0, sizeof(struct nfs_fattr));
+	nfs_fattr_init(&data->res.dir_attr);
+#ifdef CONFIG_NFS_V4_SECURITY_LABEL
+	if (NFS_SERVER(dir)->caps & NFS_CAP_SECURITY_LABEL) {
+		ret = nfs_fattr_alloc(&data->res.dir_attr, GFP_KERNEL);
+		if (ret < 0)
+			return ret;
+	}
+#endif
 	nfs_sb_active(dir->i_sb);
 	data->args.fh = NFS_FH(dir);
-	nfs_fattr_init(&data->res.dir_attr);
 
 	NFS_PROTO(dir)->unlink_setup(&msg, dir);
 

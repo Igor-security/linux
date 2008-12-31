@@ -388,6 +388,8 @@ static int nfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 	};
 	int error;
 
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
+
 	error = server->nfs_client->rpc_ops->statfs(server, fh, &res);
 	if (error < 0)
 		goto out_err;
@@ -419,10 +421,12 @@ static int nfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 
 	buf->f_namelen = server->namelen;
 
+	nfs_fattr_fini(&fattr);
 	return 0;
 
  out_err:
 	dprintk("%s: statfs error = %d\n", __func__, -error);
+	nfs_fattr_fini(&fattr);
 	return error;
 }
 

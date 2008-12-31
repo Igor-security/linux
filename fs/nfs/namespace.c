@@ -109,6 +109,8 @@ static void * nfs_follow_mountpoint(struct dentry *dentry, struct nameidata *nd)
 	if (IS_ROOT(dentry))
 		goto out_err;
 
+	memset(&fattr, 0, sizeof(struct nfs_fattr));
+
 	dprintk("%s: enter\n", __func__);
 	dput(nd->path.dentry);
 	nd->path.dentry = dget(dentry);
@@ -145,6 +147,7 @@ static void * nfs_follow_mountpoint(struct dentry *dentry, struct nameidata *nd)
 	nd->path.dentry = dget(mnt->mnt_root);
 	schedule_delayed_work(&nfs_automount_task, nfs_mountpoint_expiry_timeout);
 out:
+	nfs_fattr_fini(&fattr);
 	dprintk("%s: done, returned %d\n", __func__, err);
 
 	dprintk("<-- nfs_follow_mountpoint() = %d\n", err);
