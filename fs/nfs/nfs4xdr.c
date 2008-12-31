@@ -601,7 +601,7 @@ static void encode_nfs4_verifier(struct xdr_stream *xdr, const nfs4_verifier *ve
 	xdr_encode_opaque_fixed(p, verf->data, NFS4_VERIFIER_SIZE);
 }
 
-static int encode_attrs(struct xdr_stream *xdr, const struct iattr *iap, const struct nfs_server *server)
+static int encode_attrs(struct xdr_stream *xdr, const struct iattr *iap, const struct nfs4_label *label, const struct nfs_server *server)
 {
 	char owner_name[IDMAP_NAMESZ];
 	char owner_group[IDMAP_NAMESZ];
@@ -651,6 +651,10 @@ static int encode_attrs(struct xdr_stream *xdr, const struct iattr *iap, const s
 		}
 		len += 4 + (XDR_QUADLEN(owner_grouplen) << 2);
 	}
+#ifdef CONFIG_NFS_V4_SECURITY_LABEL
+	if (label != NULL)
+		len += 4 + (XDR_QUADLEN(label->len) << 2);
+#endif
 	if (iap->ia_valid & ATTR_ATIME_SET)
 		len += 16;
 	else if (iap->ia_valid & ATTR_ATIME)
@@ -709,6 +713,13 @@ static int encode_attrs(struct xdr_stream *xdr, const struct iattr *iap, const s
 		bmval1 |= FATTR4_WORD1_TIME_MODIFY_SET;
 		WRITE32(NFS4_SET_TO_SERVER_TIME);
 	}
+#ifdef CONFIG_NFS_V4_SECURITY_LABEL
+	if (label != NULL) {
+		bmval1 |= FATTR4_WORD1_SECURITY_LABEL;
+		WRITE32(label->len);
+		WRITEMEM(label->label, label->len);
+	}
+#endif
 	
 	/*
 	 * Now we backfill the bitmap and the attribute buffer length.
@@ -792,7 +803,7 @@ static int encode_create(struct xdr_stream *xdr, const struct nfs4_create_arg *c
 	WRITE32(create->name->len);
 	WRITEMEM(create->name->name, create->name->len);
 
-	return encode_attrs(xdr, create->attrs, create->server);
+	return encode_attrs(xdr, create->attrs, create->label, create->server);
 }
 
 static int encode_getattr_one(struct xdr_stream *xdr, uint32_t bitmap)
@@ -1000,7 +1011,7 @@ static inline void encode_createmode(struct xdr_stream *xdr, const struct nfs_op
 	switch(arg->open_flags & O_EXCL) {
 		case 0:
 			WRITE32(NFS4_CREATE_UNCHECKED);
-			encode_attrs(xdr, arg->u.attrs, arg->server);
+			encode_attrs(xdr, arg->u.attrs, arg->label, arg->server);
 			break;
 		default:
 			WRITE32(NFS4_CREATE_EXCLUSIVE);
@@ -1301,7 +1312,7 @@ static int encode_setattr(struct xdr_stream *xdr, const struct nfs_setattrargs *
         WRITE32(OP_SETATTR);
 	WRITEMEM(arg->stateid.data, NFS4_STATEID_SIZE);
 
-        if ((status = encode_attrs(xdr, arg->iap, server)))
+        if ((status = encode_attrs(xdr, arg->iap, arg->label, server)))
 		return status;
 
         return 0;
@@ -2954,6 +2965,39 @@ static int decode_attr_time_modify(struct xdr_stream *xdr, uint32_t *bitmap, str
 	return status;
 }
 
+static int decode_attr_security_label(struct xdr_stream *xdr, uint32_t *bitmap, void **ctx, __u32 *ctxlen)
+{
+	__u32 len;
+	__be32 *p;
+	int rc = 0;
+
+	if (unlikely(bitmap[1] & (FATTR4_WORD1_SECURITY_LABEL - 1U)))
+		return -EIO;
+	if (likely(bitmap[1] & FATTR4_WORD1_SECURITY_LABEL)) {
+		READ_BUF(4);
+		READ32(len);
+		READ_BUF(len);
+		if (len < XDR_MAX_NETOBJ) {
+			if (*ctx != NULL) {
+				if (*ctxlen < len) {
+					printk(KERN_ERR
+						"%s(): ctxlen %d < len %d\n",
+						__func__, *ctxlen, len);
+					/* rc = -ENOMEM; */
+					*ctx = NULL;	/* leak */
+				} else {
+					memcpy(*ctx, p, len);
+				}
+			}
+			*ctxlen = len;
+		} else
+			printk(KERN_WARNING "%s: label too long (%u)!\n",
+					__FUNCTION__, len);
+		bitmap[1] &= ~FATTR4_WORD1_SECURITY_LABEL;
+	}
+	return rc;
+}
+
 static int verify_attr_len(struct xdr_stream *xdr, __be32 *savep, uint32_t attrlen)
 {
 	unsigned int attrwords = XDR_QUADLEN(attrlen);
@@ -3187,6 +3231,9 @@ static int decode_getfattr(struct xdr_stream *xdr, struct nfs_fattr *fattr, cons
 	if ((status = decode_attr_time_modify(xdr, bitmap, &fattr->mtime)) != 0)
 		goto xdr_error;
 	if ((status = decode_attr_mounted_on_fileid(xdr, bitmap, &fileid)) != 0)
+		goto xdr_error;
+	if ((status = decode_attr_security_label(xdr, bitmap,
+				&fattr->label, &fattr->label_len)) != 0)
 		goto xdr_error;
 	if (fattr->fileid == 0 && fileid != 0)
 		fattr->fileid = fileid;

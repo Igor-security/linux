@@ -563,8 +563,15 @@ static void nfs_show_mount_options(struct seq_file *m, struct nfs_server *nfss,
 		nfs_show_mountd_options(m, nfss, showdefaults);
 
 #ifdef CONFIG_NFS_V4
-	if (clp->rpc_ops->version == 4)
+	if (clp->rpc_ops->version == 4) {
 		seq_printf(m, ",clientaddr=%s", clp->cl_ipaddr);
+#ifdef CONFIG_NFS_V4_SECURITY_LABEL
+		if (nfss->caps & NFS_CAP_SECURITY_LABEL)
+			seq_printf(m, ",security_label");
+		else
+			seq_printf(m, ",nosecurity_label");
+#endif
+	}
 #endif
 }
 
@@ -621,6 +628,12 @@ static int nfs_show_stats(struct seq_file *m, struct vfsmount *mnt)
 		seq_printf(m, "bm0=0x%x", nfss->attr_bitmask[0]);
 		seq_printf(m, ",bm1=0x%x", nfss->attr_bitmask[1]);
 		seq_printf(m, ",acl=0x%x", nfss->acl_bitmask);
+#ifdef CONFIG_NFS_V4_SECURITY_LABEL
+		if (nfss->caps & NFS_CAP_SECURITY_LABEL)
+			seq_printf(m, ",security_label");
+		else
+			seq_printf(m, ",nosecurity_label");
+#endif
 	}
 #endif
 
@@ -2210,6 +2223,9 @@ static int nfs4_validate_mount_data(void *options,
 	if (data == NULL)
 		goto out_no_data;
 
+#ifdef CONFIG_NFS_V4_SECURITY_LABEL
+	args->flags		|= NFS4_MOUNT_SECURITY_LABEL; /* Default */
+#endif
 	args->rsize		= NFS_MAX_FILE_IO_SIZE;
 	args->wsize		= NFS_MAX_FILE_IO_SIZE;
 	args->acregmin		= NFS_DEF_ACREGMIN;
@@ -2396,6 +2412,21 @@ static int nfs4_get_sb(struct file_system_type *fs_type,
 		error = PTR_ERR(mntroot);
 		goto error_splat_super;
 	}
+
+#ifdef CONFIG_SECURITY_SELINUX
+	if (server->caps & NFS_CAP_SECURITY_LABEL)
+		security_sb_parse_opts_str("native_labels", &data->lsm_opts);
+	else
+		data->flags &= ~NFS4_MOUNT_SECURITY_LABEL;
+		/* XXX: we need a way to separate the default use of
+			security labels if supported from the userland
+			passing in the requirment that they be present.
+
+			default			- will
+			-o nosecurity_label 	- won't
+			-o security_label	- must
+		*/
+#endif
 
 	error = security_sb_set_mnt_opts(s, &data->lsm_opts);
 	if (error)
