@@ -322,8 +322,7 @@ void __ubsan_handle_type_mismatch(struct type_mismatch_data *data,
 	if (!ptr)
 		handle_null_ptr_deref(data);
 	else if (data->alignment && !IS_ALIGNED(ptr, data->alignment))
-		if (!IS_ENABLED(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS))
-			handle_missaligned_access(data, ptr);
+		handle_missaligned_access(data, ptr);
 	else
 		handle_object_size_mismatch(data, ptr);
 }
