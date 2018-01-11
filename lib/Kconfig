@@ -287,6 +287,21 @@ config DECOMPRESS_LZ4
 config GENERIC_ALLOCATOR
 	bool
 
+config TEST_GENERIC_ALLOCATOR
+	bool "genalloc tester"
+	default n
+	select GENERIC_ALLOCATOR
+	help
+	  Enable automated testing of the generic allocator.
+	  The testing is primarily for the tracking of allocated space.
+
+config TEST_GENERIC_ALLOCATOR_VERBOSE
+	bool "make the genalloc tester more verbose"
+	default n
+	select TEST_GENERIC_ALLOCATOR
+	help
+	  More information will be displayed during the self-testing.
+
 #
 # reed solomon support is select'ed if needed
 #
