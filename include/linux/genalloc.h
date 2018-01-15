@@ -120,6 +120,10 @@ void *gen_pool_dma_alloc(struct gen_pool *pool, size_t size, dma_addr_t *dma);
 void gen_pool_free(struct gen_pool *pool, unsigned long addr, size_t size);
 
 
+void gen_pool_flush_chunk(struct gen_pool *pool,
+			  struct gen_pool_chunk *chunk);
+
+
 void gen_pool_for_each_chunk(struct gen_pool *pool,
 			     void (*func)(struct gen_pool *pool,
 					  struct gen_pool_chunk *chunk,

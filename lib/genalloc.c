@@ -662,6 +662,29 @@ EXPORT_SYMBOL(gen_pool_free);
 
 
 /**
+ * gen_pool_flush_chunk() - drops all the allocations from a specific chunk
+ * @pool:	the generic memory pool
+ * @chunk:	The chunk to wipe clear.
+ *
+ * This is meant to be called only while destroying a pool. It's up to the
+ * caller to avoid races, but really, at this point the pool should have
+ * already been retired and it should have become unavailable for any other
+ * sort of operation.
+ */
+void gen_pool_flush_chunk(struct gen_pool *pool,
+			  struct gen_pool_chunk *chunk)
+{
+	size_t size;
+
+	size = chunk->end_addr + 1 - chunk->start_addr;
+	memset(chunk->entries, 0,
+	       DIV_ROUND_UP(size >> pool->min_alloc_order * BITS_PER_ENTRY,
+			    BITS_PER_BYTE));
+	atomic_long_set(&chunk->avail, size);
+}
+
+
+/**
  * gen_pool_for_each_chunk() - call func for every chunk of generic memory pool
  * @pool:	the generic memory pool
  * @func:	func to call
