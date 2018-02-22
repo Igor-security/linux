@@ -348,9 +348,12 @@ bool task_in_mem_cgroup(struct task_struct *task, struct mem_cgroup *memcg);
 struct mem_cgroup *mem_cgroup_from_task(struct task_struct *p);
 
 static inline
-struct mem_cgroup *mem_cgroup_from_css(struct cgroup_subsys_state *css){
+struct mem_cgroup *mem_cgroup_from_css(struct cgroup_subsys_state *css)
+{
 	return css ? container_of(css, struct mem_cgroup, css) : NULL;
 }
+
+struct mem_cgroup *get_mem_cgroup_from_mm(struct mm_struct *mm);
 
 static inline void mem_cgroup_put(struct mem_cgroup *memcg)
 {
@@ -801,6 +804,11 @@ static inline bool mm_match_cgroup(struct mm_struct *mm,
 		struct mem_cgroup *memcg)
 {
 	return true;
+}
+
+static inline struct mem_cgroup *get_mem_cgroup_from_mm(struct mm_struct *mm)
+{
+	return NULL;
 }
 
 static inline bool task_in_mem_cgroup(struct task_struct *task,
