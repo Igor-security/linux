@@ -3275,14 +3275,14 @@ must_grow:
 
 static __always_inline void *
 slab_alloc_node(struct kmem_cache *cachep, gfp_t flags, int nodeid,
-		   unsigned long caller)
+		struct mem_cgroup *memcg, unsigned long caller)
 {
 	unsigned long save_flags;
 	void *ptr;
 	int slab_node = numa_mem_id();
 
 	flags &= gfp_allowed_mask;
-	cachep = slab_pre_alloc_hook(cachep, flags);
+	cachep = slab_pre_alloc_hook(cachep, flags, memcg);
 	if (unlikely(!cachep))
 		return NULL;
 
@@ -3355,13 +3355,14 @@ __do_cache_alloc(struct kmem_cache *cachep, gfp_t flags)
 #endif /* CONFIG_NUMA */
 
 static __always_inline void *
-slab_alloc(struct kmem_cache *cachep, gfp_t flags, unsigned long caller)
+slab_alloc(struct kmem_cache *cachep, gfp_t flags, struct mem_cgroup *memcg,
+	   unsigned long caller)
 {
 	unsigned long save_flags;
 	void *objp;
 
 	flags &= gfp_allowed_mask;
-	cachep = slab_pre_alloc_hook(cachep, flags);
+	cachep = slab_pre_alloc_hook(cachep, flags, memcg);
 	if (unlikely(!cachep))
 		return NULL;
 
@@ -3535,7 +3536,7 @@ void ___cache_free(struct kmem_cache *cachep, void *objp,
  */
 void *kmem_cache_alloc(struct kmem_cache *cachep, gfp_t flags)
 {
-	void *ret = slab_alloc(cachep, flags, _RET_IP_);
+	void *ret = slab_alloc(cachep, flags, NULL,  _RET_IP_);
 
 	kasan_slab_alloc(cachep, ret, flags);
 	trace_kmem_cache_alloc(_RET_IP_, ret,
@@ -3544,6 +3545,19 @@ void *kmem_cache_alloc(struct kmem_cache *cachep, gfp_t flags)
 	return ret;
 }
 EXPORT_SYMBOL(kmem_cache_alloc);
+
+void *kmem_cache_alloc_memcg(struct kmem_cache *cachep, gfp_t flags,
+			     struct mem_cgroup *memcg)
+{
+	void *ret = slab_alloc(cachep, flags, memcg, _RET_IP_);
+
+	kasan_slab_alloc(cachep, ret, flags);
+	trace_kmem_cache_alloc(_RET_IP_, ret,
+			       cachep->object_size, cachep->size, flags);
+
+	return ret;
+}
+EXPORT_SYMBOL(kmem_cache_alloc_memcg);
 
 static __always_inline void
 cache_alloc_debugcheck_after_bulk(struct kmem_cache *s, gfp_t flags,
@@ -3560,7 +3574,7 @@ int kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t size,
 {
 	size_t i;
 
-	s = slab_pre_alloc_hook(s, flags);
+	s = slab_pre_alloc_hook(s, flags, NULL);
 	if (!s)
 		return 0;
 
@@ -3601,7 +3615,7 @@ kmem_cache_alloc_trace(struct kmem_cache *cachep, gfp_t flags, size_t size)
 {
 	void *ret;
 
-	ret = slab_alloc(cachep, flags, _RET_IP_);
+	ret = slab_alloc(cachep, flags, NULL, _RET_IP_);
 
 	kasan_kmalloc(cachep, ret, size, flags);
 	trace_kmalloc(_RET_IP_, ret,
@@ -3609,6 +3623,21 @@ kmem_cache_alloc_trace(struct kmem_cache *cachep, gfp_t flags, size_t size)
 	return ret;
 }
 EXPORT_SYMBOL(kmem_cache_alloc_trace);
+
+void *
+kmem_cache_alloc_memcg_trace(struct kmem_cache *cachep, gfp_t flags,
+			     size_t size, struct mem_cgroup *memcg)
+{
+	void *ret;
+
+	ret = slab_alloc(cachep, flags, memcg, _RET_IP_);
+
+	kasan_kmalloc(cachep, ret, size, flags);
+	trace_kmalloc(_RET_IP_, ret,
+		      size, cachep->size, flags);
+	return ret;
+}
+EXPORT_SYMBOL(kmem_cache_alloc_memcg_trace);
 #endif
 
 #ifdef CONFIG_NUMA
@@ -3625,7 +3654,7 @@ EXPORT_SYMBOL(kmem_cache_alloc_trace);
  */
 void *kmem_cache_alloc_node(struct kmem_cache *cachep, gfp_t flags, int nodeid)
 {
-	void *ret = slab_alloc_node(cachep, flags, nodeid, _RET_IP_);
+	void *ret = slab_alloc_node(cachep, flags, nodeid, NULL, _RET_IP_);
 
 	kasan_slab_alloc(cachep, ret, flags);
 	trace_kmem_cache_alloc_node(_RET_IP_, ret,
@@ -3636,6 +3665,20 @@ void *kmem_cache_alloc_node(struct kmem_cache *cachep, gfp_t flags, int nodeid)
 }
 EXPORT_SYMBOL(kmem_cache_alloc_node);
 
+void *kmem_cache_alloc_node_memcg(struct kmem_cache *cachep, gfp_t flags,
+				  int nodeid, struct mem_cgroup *memcg)
+{
+	void *ret = slab_alloc_node(cachep, flags, nodeid, memcg, _RET_IP_);
+
+	kasan_slab_alloc(cachep, ret, flags);
+	trace_kmem_cache_alloc_node(_RET_IP_, ret,
+				    cachep->object_size, cachep->size,
+				    flags, nodeid);
+
+	return ret;
+}
+EXPORT_SYMBOL(kmem_cache_alloc_node_memcg);
+
 #ifdef CONFIG_TRACING
 void *kmem_cache_alloc_node_trace(struct kmem_cache *cachep,
 				  gfp_t flags,
@@ -3644,7 +3687,7 @@ void *kmem_cache_alloc_node_trace(struct kmem_cache *cachep,
 {
 	void *ret;
 
-	ret = slab_alloc_node(cachep, flags, nodeid, _RET_IP_);
+	ret = slab_alloc_node(cachep, flags, nodeid, NULL, _RET_IP_);
 
 	kasan_kmalloc(cachep, ret, size, flags);
 	trace_kmalloc_node(_RET_IP_, ret,
@@ -3653,6 +3696,21 @@ void *kmem_cache_alloc_node_trace(struct kmem_cache *cachep,
 	return ret;
 }
 EXPORT_SYMBOL(kmem_cache_alloc_node_trace);
+
+void *kmem_cache_alloc_node_memcg_trace(struct kmem_cache *cachep, gfp_t flags,
+			int nodeid, size_t size, struct mem_cgroup *memcg)
+{
+	void *ret;
+
+	ret = slab_alloc_node(cachep, flags, nodeid, memcg, _RET_IP_);
+
+	kasan_kmalloc(cachep, ret, size, flags);
+	trace_kmalloc_node(_RET_IP_, ret,
+			   size, cachep->size,
+			   flags, nodeid);
+	return ret;
+}
+EXPORT_SYMBOL(kmem_cache_alloc_node_memcg_trace);
 #endif
 
 static __always_inline void *
@@ -3699,7 +3757,7 @@ static __always_inline void *__do_kmalloc(size_t size, gfp_t flags,
 	cachep = kmalloc_slab(size, flags);
 	if (unlikely(ZERO_OR_NULL_PTR(cachep)))
 		return cachep;
-	ret = slab_alloc(cachep, flags, caller);
+	ret = slab_alloc(cachep, flags, NULL, caller);
 
 	kasan_kmalloc(cachep, ret, size, flags);
 	trace_kmalloc(caller, ret,
