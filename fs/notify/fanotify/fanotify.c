@@ -140,24 +140,22 @@ static bool fanotify_should_send_event(struct fsnotify_mark *inode_mark,
 }
 
 struct fanotify_event_info *fanotify_alloc_event(struct inode *inode, u32 mask,
-						 const struct path *path,
-						 struct mem_cgroup *memcg)
+						 const struct path *path)
 {
 	struct fanotify_event_info *event;
 
 	if (fanotify_is_perm_event(mask)) {
 		struct fanotify_perm_event_info *pevent;
 
-		pevent = kmem_cache_alloc_memcg(fanotify_perm_event_cachep,
-						GFP_KERNEL, memcg);
+		pevent = kmem_cache_alloc(fanotify_perm_event_cachep,
+					  GFP_KERNEL);
 		if (!pevent)
 			return NULL;
 		event = &pevent->fae;
 		pevent->response = 0;
 		goto init;
 	}
-	event = kmem_cache_alloc_memcg(fanotify_event_cachep, GFP_KERNEL,
-				       memcg);
+	event = kmem_cache_alloc(fanotify_event_cachep, GFP_KERNEL);
 	if (!event)
 		return NULL;
 init: __maybe_unused
@@ -212,7 +210,7 @@ static int fanotify_handle_event(struct fsnotify_group *group,
 			return 0;
 	}
 
-	event = fanotify_alloc_event(inode, mask, data, group->memcg);
+	event = fanotify_alloc_event(inode, mask, data);
 	ret = -ENOMEM;
 	if (unlikely(!event))
 		goto finish;
