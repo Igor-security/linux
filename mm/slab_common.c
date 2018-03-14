@@ -368,7 +368,7 @@ struct kmem_cache *find_mergeable(unsigned int size, unsigned int align,
 }
 
 static struct kmem_cache *create_cache(const char *name,
-		unsigned int object_size, unsigned int size, unsigned int align,
+		unsigned int object_size, unsigned int align,
 		slab_flags_t flags, void (*ctor)(void *),
 		struct mem_cgroup *memcg, struct kmem_cache *root_cache)
 {
@@ -381,8 +381,7 @@ static struct kmem_cache *create_cache(const char *name,
 		goto out;
 
 	s->name = name;
-	s->object_size = object_size;
-	s->size = size;
+	s->size = s->object_size = object_size;
 	s->align = align;
 	s->ctor = ctor;
 
@@ -475,7 +474,7 @@ kmem_cache_create(const char *name, unsigned int size, unsigned int align,
 		goto out_unlock;
 	}
 
-	s = create_cache(cache_name, size, size,
+	s = create_cache(cache_name, size,
 			 calculate_alignment(flags, align, size),
 			 flags, ctor, NULL, NULL);
 	if (IS_ERR(s)) {
@@ -613,7 +612,7 @@ void memcg_create_kmem_cache(struct mem_cgroup *memcg,
 		goto out_unlock;
 
 	s = create_cache(cache_name, root_cache->object_size,
-			 root_cache->size, root_cache->align,
+			 root_cache->align,
 			 root_cache->flags & CACHE_CREATE_MASK,
 			 root_cache->ctor, memcg, root_cache);
 	/*
