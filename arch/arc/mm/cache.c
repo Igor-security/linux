@@ -830,7 +830,7 @@ void flush_dcache_page(struct page *page)
 	}
 
 	/* don't handle anon pages here */
-	mapping = page_mapping(page);
+	mapping = page_mapping_file(page);
 	if (!mapping)
 		return;
 
