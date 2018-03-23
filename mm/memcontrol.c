@@ -723,9 +723,9 @@ static struct mem_cgroup *get_mem_cgroup(struct mem_cgroup *memcg)
  * invocations for reference counting, or use mem_cgroup_iter_break()
  * to cancel a hierarchy walk before the round-trip is complete.
  *
- * Reclaimers can specify a zone and a priority level in @reclaim to
+ * Reclaimers can specify a node and a priority level in @reclaim to
  * divide up the memcgs in the hierarchy among all concurrent
- * reclaimers operating on the same zone and priority.
+ * reclaimers operating on the same node and priority.
  */
 struct mem_cgroup *mem_cgroup_iter(struct mem_cgroup *root,
 				   struct mem_cgroup *prev,
@@ -2310,7 +2310,7 @@ void memcg_kmem_put_cache(struct kmem_cache *cachep)
 }
 
 /**
- * memcg_kmem_charge: charge a kmem page
+ * memcg_kmem_charge_memcg: charge a kmem page
  * @page: page to charge
  * @gfp: reclaim mode
  * @order: allocation order
