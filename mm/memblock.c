@@ -1139,7 +1139,7 @@ unsigned long __init_memblock memblock_next_valid_pfn(unsigned long pfn,
 	struct memblock_type *type = &memblock.memory;
 	unsigned int right = type->cnt;
 	unsigned int mid, left = 0;
-	phys_addr_t addr = PFN_PHYS(++pfn);
+	phys_addr_t addr = PFN_PHYS(pfn + 1);
 
 	do {
 		mid = (right + left) / 2;
@@ -1150,15 +1150,15 @@ unsigned long __init_memblock memblock_next_valid_pfn(unsigned long pfn,
 				  type->regions[mid].size))
 			left = mid + 1;
 		else {
-			/* addr is within the region, so pfn is valid */
-			return pfn;
+			/* addr is within the region, so pfn + 1 is valid */
+			return min(pfn + 1, max_pfn);
 		}
 	} while (left < right);
 
 	if (right == type->cnt)
-		return -1UL;
+		return max_pfn;
 	else
-		return PHYS_PFN(type->regions[right].base);
+		return min(PHYS_PFN(type->regions[right].base), max_pfn);
 }
 
 static phys_addr_t __init memblock_alloc_range_nid(phys_addr_t size,
