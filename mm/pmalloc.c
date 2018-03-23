@@ -19,10 +19,184 @@
 #include <linux/rculist.h>
 #include <linux/set_memory.h>
 #include <linux/bug.h>
+#include <linux/mutex.h>
+#include <linux/llist.h>
 #include <asm/cacheflush.h>
 #include <asm/page.h>
 
 #include <linux/pmalloc.h>
+
+#define MAX_ALIGN_ORDER (ilog2(sizeof(void *)))
+struct qmalloc_pool {
+	struct mutex mutex;
+	struct list_head pool_node;
+	struct llist_head vm_areas;
+	unsigned long refill;
+	unsigned long offset;
+	unsigned short align;
+};
+
+static LIST_HEAD(pools_list);
+static DEFINE_MUTEX(pools_mutex);
+
+static inline void tag_area(struct vmap_area *area)
+{
+	area->vm->flags |= VM_PMALLOC;
+}
+
+static inline void untag_area(struct vmap_area *area)
+{
+	area->vm->flags &= ~VM_PMALLOC;
+}
+
+static inline struct vmap_area *current_area(struct qmalloc_pool *pool)
+{
+	return llist_entry(pool->vm_areas.first, struct vmap_area,
+			   area_list);
+}
+
+static inline bool is_area_protected(struct vmap_area *area)
+{
+	return area->vm->flags & VM_PMALLOC_PROTECTED;
+}
+
+static inline bool protect_area(struct vmap_area *area)
+{
+	if (unlikely(is_area_protected(area)))
+		return false;
+	set_memory_ro(area->va_start, area->vm->nr_pages);
+	area->vm->flags |= VM_PMALLOC_PROTECTED;
+	return true;
+}
+
+static inline void destroy_area(struct vmap_area *area)
+{
+	set_memory_rw(area->va_start, area->vm->nr_pages);
+	vfree((void *)area->va_start);
+}
+
+static inline bool empty(struct qmalloc_pool *pool)
+{
+	return unlikely(llist_empty(&pool->vm_areas));
+}
+
+static inline bool protected(struct qmalloc_pool *pool)
+{
+	return is_area_protected(current_area(pool));
+}
+
+static inline bool exhausted(struct qmalloc_pool *pool, size_t size)
+{
+	return unlikely(pool->offset < round_up(size, pool->align));
+}
+
+static inline bool space_needed(struct qmalloc_pool *pool, size_t size)
+{
+	return empty(pool) || protected(pool) || exhausted(pool, size);
+}
+
+struct qmalloc_pool *qmalloc_create_pool(unsigned long refill,
+					 unsigned short align_order)
+{
+	struct qmalloc_pool *pool;
+
+	if (WARN(refill > LONG_MAX,
+		 "refill capped to %ld bytes", LONG_MAX))
+		return NULL;
+	if (WARN(align_order > MAX_ALIGN_ORDER,
+		 "Max align order for a pool is %d", MAX_ALIGN_ORDER))
+		return NULL;
+	pool = kzalloc(sizeof(struct qmalloc_pool), GFP_KERNEL);
+	if (WARN(!pool, "Could not allocate pool meta data."))
+		return NULL;
+	pool->refill = refill ? PAGE_ALIGN(refill) : PAGE_SIZE;
+	pool->align = 1 << align_order;
+	mutex_init(&pool->mutex);
+	mutex_lock(&pools_mutex);
+	list_add(&pool->pool_node, &pools_list);
+	mutex_unlock(&pools_mutex);
+	return pool;
+}
+
+#define trace_grow() \
+	pr_err("size: %zd    refill: %lu", size, pool->refill); \
+	pr_err("Allocated addr: 0x%px", addr); \
+	pr_err("va_start 0x%px", (void*)area->va_start); \
+	pr_err("va_end   0x%px", (void*)area->va_end); \
+	pr_err("nr_pages   %u", area->vm->nr_pages); \
+	pr_err("size     %lu       %lu", \
+	       area->vm->size, area->va_end - area->va_start); \
+	pr_err("addr     0x%px", area->vm->addr);
+
+static int grow(struct qmalloc_pool *pool, size_t size)
+{
+	void *addr;
+	struct vmap_area *area;
+
+	addr = vmalloc(max(size, pool->refill));
+	if (WARN(!addr, "Failed to allocate %zd bytes", PAGE_ALIGN(size)))
+		return -ENOMEM;
+
+	area = find_vmap_area((unsigned long)addr);
+	tag_area(area);
+	pool->offset = area->vm->nr_pages * PAGE_SIZE;
+	llist_add(&area->area_list, &pool->vm_areas);
+	trace_grow();
+	return 0;
+}
+
+static unsigned long reserve_mem(struct qmalloc_pool *pool, size_t size)
+{
+	pool->offset -= round_up(size, pool->align);
+	return current_area(pool)->va_start + pool->offset;
+
+}
+
+void *qmalloc(struct qmalloc_pool *pool, size_t size)
+{
+	unsigned long retval = 0;
+
+	mutex_lock(&pool->mutex);
+	if (space_needed(pool, size))
+		if (unlikely(grow(pool, size)))
+			goto out;
+	retval = reserve_mem(pool, size);
+out:
+	mutex_unlock(&pool->mutex);
+	return (void *)retval;
+}
+
+void qmalloc_protect_pool(struct qmalloc_pool *pool)
+{
+	struct vmap_area *area;
+
+	mutex_lock(&pool->mutex);
+	llist_for_each_entry(area, pool->vm_areas.first, area_list)
+		if (unlikely(!protect_area(area)))
+			break;
+	mutex_unlock(&pool->mutex);
+}
+
+void qmalloc_destroy_pool(struct qmalloc_pool *pool)
+{
+	struct vmap_area *area;
+	struct llist_node *tmp;
+
+	mutex_lock(&pools_mutex);
+	list_del(&pool->pool_node);
+	mutex_unlock(&pools_mutex);
+
+	mutex_lock(&pool->mutex);
+	while (pool->vm_areas.first) {
+		tmp = pool->vm_areas.first;
+		pool->vm_areas.first = pool->vm_areas.first->next;
+		area = llist_entry(tmp, struct vmap_area, area_list);
+		destroy_area(area);
+	}
+	mutex_unlock(&pool->mutex);
+	kfree(pool);
+}
+
 /*
  * pmalloc_data contains the data specific to a pmalloc pool,
  * in a format compatible with the design of gen_alloc.
@@ -611,6 +785,26 @@ void pmalloc_destroy_pool(struct gen_pool *pool)
 	kfree(data);
 }
 
+static void qmalloc_test(void)
+{
+	struct qmalloc_pool *pool;
+	void *p1, *p2, *p3;
+
+	pool = qmalloc_create_pool(PAGE_SIZE * 1, 0);
+	pr_err("XXXXXXXXXXXXXXXXXXXXXXXX pool: %px, refill: %ld",
+	       pool, pool->refill / PAGE_SIZE);
+	p1 = qmalloc(pool, sizeof(int));
+	*(int *)p1 = -1;
+	pr_err("1)  p1: 0x%px  *p1: %d", p1, *(int*)p1);
+	p2 = qmalloc(pool, PAGE_SIZE - sizeof(int));
+	pr_err("2)  p2: 0x%px  *p2: %d", p2, *(int*)p2);
+	p3 = qmalloc(pool, sizeof(int));
+	*(int *)p3 = 2;
+	pr_err("3)  p3: 0x%px  *p3: %d", p3, *(int*)p3);
+	qmalloc_protect_pool(pool);
+//	*(int *)p3 = 5;
+	qmalloc_destroy_pool(pool);
+}
 
 /**
  * pmalloc_late_init() - registers to debug sysfs pools pretading it
@@ -637,7 +831,7 @@ static int __init pmalloc_late_init(void)
 	list_for_each_entry_safe(data, n, &pmalloc_list, node)
 		pmalloc_connect(data);
 	mutex_unlock(&pmalloc_mutex);
-
+	qmalloc_test();
 	return 0;
 }
 late_initcall(pmalloc_late_init);
