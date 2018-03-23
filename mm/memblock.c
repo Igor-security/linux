@@ -1133,7 +1133,8 @@ int __init_memblock memblock_set_node(phys_addr_t base, phys_addr_t size,
 }
 #endif /* CONFIG_HAVE_MEMBLOCK_NODE_MAP */
 
-unsigned long __init_memblock memblock_next_valid_pfn(unsigned long pfn)
+unsigned long __init_memblock memblock_next_valid_pfn(unsigned long pfn,
+						      unsigned long max_pfn)
 {
 	struct memblock_type *type = &memblock.memory;
 	unsigned int right = type->cnt;
