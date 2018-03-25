@@ -14,9 +14,9 @@
 #define SIZE_1 (PAGE_SIZE * 3)
 #define SIZE_2 1000
 
-static struct gen_pool *pool_unprot;
-static struct gen_pool *pool_prot;
-static struct gen_pool *pool_pre;
+static struct pmalloc_pool *pool_unprot;
+static struct pmalloc_pool *pool_prot;
+static struct pmalloc_pool *pool_pre;
 
 static void *var_prot;
 static void *var_unprot;
@@ -62,15 +62,15 @@ static bool create_pools(void)
 {
 	pr_notice("Testing pool creation capability");
 
-	pool_pre = pmalloc_create_pool("preallocated", 0);
+	pool_pre = pmalloc_create_pool();
 	if (unlikely(!pool_pre))
 		goto err_pre;
 
-	pool_unprot = pmalloc_create_pool("unprotected", 0);
+	pool_unprot = pmalloc_create_pool();
 	if (unlikely(!pool_unprot))
 		goto err_unprot;
 
-	pool_prot = pmalloc_create_pool("protected", 0);
+	pool_prot = pmalloc_create_pool();
 	if (unlikely(!(pool_prot)))
 		goto err_prot;
 	return true;
@@ -112,17 +112,16 @@ static bool test_alloc(void)
 	if (unlikely(!var_vmall))
 		goto err_vmall;
 
-	var_unprot = pmalloc(pool_unprot,  SIZE_1 - 1, GFP_KERNEL);
+	var_unprot = pmalloc(pool_unprot,  SIZE_1 - 1);
 	if (unlikely(!var_unprot))
 		goto err_unprot;
 
-	var_prot = pmalloc(pool_prot,  SIZE_1, GFP_KERNEL);
+	var_prot = pmalloc(pool_prot,  SIZE_1);
 	if (unlikely(!var_prot))
 		goto err_prot;
 
 	return true;
 err_prot:
-	pfree(pool_unprot, var_unprot);
 err_unprot:
 	vfree(var_vmall);
 err_vmall:
@@ -153,28 +152,14 @@ static bool test_is_pmalloc_object(void)
 }
 
 
-/**
- * test_protected_allocation() - allocation from protected pool must fail
- *
- * Once the pool is protected, the pages associated with it become
- * read-only and any further attempt to allocate data will be declined.
- *
- * Return:
- * * true	- success
- * * false	- error
- */
-static bool test_protected_allocation(void)
+static bool test_overflowing_allocation(void)
 {
-	pmalloc_protect_pool(pool_prot);
-	/*
-	 * This will intentionally trigger a WARN, because the pool being
-	 * allocated from is already protected.
-	 */
-	pr_notice("Test allocation from a protected pool. It will WARN.");
-	return !WARN(unlikely(pmalloc(pool_prot, 10, GFP_KERNEL)),
-		     "no memory from a protected pool");
-}
+	int i;
 
+	pn_notice("Test ");
+	for (i = 1; i; i *= 2)
+		pzalloc(pool_unprot, i - 1);
+}
 
 /**
  * test_destroy_pool() - destroying an unprotected pool must WARN
@@ -222,16 +207,12 @@ void test_pmalloc(void)
 	if (unlikely(!test_is_pmalloc_object()))
 		goto err_is_object;
 
+	test_exploding_allocation();
 	*(int *)var_prot = 0;
-	pfree(pool_unprot, var_unprot);
 	vfree(var_vmall);
-
-	if (unlikely(!test_protected_allocation()))
-		goto err_prot_all;
 
 	test_destroy_pools();
 	return;
-err_prot_all:
 err_is_object:
 err_alloc:
 	destroy_pools();
