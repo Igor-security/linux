@@ -2,7 +2,7 @@
 /*
  * pmalloc.h: Header for Protectable Memory Allocator
  *
- * (C) Copyright 2017 Huawei Technologies Co. Ltd.
+ * (C) Copyright 2017-18 Huawei Technologies Co. Ltd.
  * Author: Igor Stoppa <igor.stoppa@huawei.com>
  */
 
@@ -10,10 +10,8 @@
 #define _LINUX_PMALLOC_H
 
 
-#include <linux/genalloc.h>
 #include <linux/string.h>
 
-#define PMALLOC_DEFAULT_ALLOC_ORDER (-1)
 
 /*
  * Library for dynamic allocation of pools of memory that can be,
@@ -23,33 +21,33 @@
  * where either it is not possible to know the initialization value before
  * init is completed, or the amount of data is variable and can be
  * determined only at run-time.
- *
- * ***WARNING***
- * The user of the API is expected to synchronize:
- * 1) allocation,
- * 2) writes to the allocated memory,
- * 3) write protection of the pool,
- * 4) freeing of the allocated memory, and
- * 5) destruction of the pool.
- *
- * For a non-threaded scenario, this type of locking is not even required.
- *
- * Even if the library were to provide support for locking, point 2)
- * would still depend on the user taking the lock.
  */
 
 
-struct gen_pool *pmalloc_create_pool(const char *name,
-					 int min_alloc_order);
+struct pmalloc_pool *pmalloc_create_custom_pool(unsigned long int refill,
+						short int align_order);
 
+/**
+ * pmalloc_create_pool() - create a new protectable memory pool
+ *
+ * Shorthand for pmalloc_create_custom_pool() with default arguments.
+ *
+ * Return:
+ * * pointer to the new pool	- success
+ * * NULL			- error
+ */
+static inline struct pmalloc_pool *pmalloc_create_pool(void)
+{
+	return pmalloc_create_custom_pool(0, -1);
+}
 
 int is_pmalloc_object(const void *ptr, const unsigned long n);
 
 
-bool pmalloc_expand_pool(struct gen_pool *pool, size_t size);
+//bool pmalloc_expand_pool(struct gen_pool *pool, size_t size);
 
 
-void *pmalloc(struct gen_pool *pool, size_t size, gfp_t gfp);
+void *pmalloc(struct pmalloc_pool *pool, size_t size);
 
 
 /**
@@ -66,9 +64,14 @@ void *pmalloc(struct gen_pool *pool, size_t size, gfp_t gfp);
  * * NULL				- either no memory available or
  *					  pool already read-only
  */
-static inline void *pzalloc(struct gen_pool *pool, size_t size, gfp_t gfp)
+static inline void *pzalloc(struct pmalloc_pool *pool, size_t size)
 {
-	return pmalloc(pool, size, gfp | __GFP_ZERO);
+	void *ptr = pmalloc(pool, size);
+
+	if (likely(ptr))
+		memset(ptr, 0, size);
+
+	return ptr;
 }
 
 
@@ -85,12 +88,10 @@ static inline void *pzalloc(struct gen_pool *pool, size_t size, gfp_t gfp)
  * * the pmalloc result	- success
  * * NULL		- error
  */
-static inline void *pmalloc_array(struct gen_pool *pool, size_t n,
-				  size_t size, gfp_t flags)
+static inline void *pmalloc_array(struct pmalloc_pool *pool, size_t n,
+				  size_t size)
 {
-	if (unlikely(!(pool && n && size)))
-		return NULL;
-	return pmalloc(pool, n * size, flags);
+	return pmalloc(pool, n * size);
 }
 
 
@@ -107,10 +108,10 @@ static inline void *pmalloc_array(struct gen_pool *pool, size_t n,
  * * the pmalloc result	- success
  * * NULL		- error
  */
-static inline void *pcalloc(struct gen_pool *pool, size_t n,
-			    size_t size, gfp_t flags)
+static inline void *pcalloc(struct pmalloc_pool *pool, size_t n,
+			    size_t size)
 {
-	return pmalloc_array(pool, n, size, flags | __GFP_ZERO);
+	return pmalloc_array(pool, n, size);
 }
 
 
@@ -127,37 +128,22 @@ static inline void *pcalloc(struct gen_pool *pool, size_t n,
  * * pointer to the replica	- success
  * * NULL			- error
  */
-static inline char *pstrdup(struct gen_pool *pool, const char *s, gfp_t gfp)
+static inline char *pstrdup(struct pmalloc_pool *pool, const char *s)
 {
 	size_t len;
 	char *buf;
 
-	if (unlikely(pool == NULL || s == NULL))
-		return NULL;
-
 	len = strlen(s) + 1;
-	buf = pmalloc(pool, len, gfp);
+	buf = pmalloc(pool, len);
 	if (likely(buf))
 		strncpy(buf, s, len);
 	return buf;
 }
 
 
-void pmalloc_protect_pool(struct gen_pool *pool);
+void pmalloc_protect_pool(struct pmalloc_pool *pool);
 
 
-/**
- * pfree() - frees memory previously allocated from a pool
- * @pool: handle to the pool used to allocate the memory to free
- * @addr: the beginning of the location to free
- *
- */
-static inline void pfree(struct gen_pool *pool, const void *addr)
-{
-	gen_pool_free(pool, (unsigned long)addr, 0);
-}
-
-
-void pmalloc_destroy_pool(struct gen_pool *pool);
+void pmalloc_destroy_pool(struct pmalloc_pool *pool);
 
 #endif
