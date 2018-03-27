@@ -742,7 +742,7 @@ static void free_unmap_vmap_area(struct vmap_area *va)
 	free_vmap_area_noflush(va);
 }
 
-struct vmap_area *find_vmap_area(unsigned long addr)
+static struct vmap_area *find_vmap_area(unsigned long addr)
 {
 	struct vmap_area *va;
 
@@ -1523,6 +1523,7 @@ static void __vunmap(const void *addr, int deallocate_pages)
 			struct page *page = area->pages[i];
 
 			BUG_ON(!page);
+			page->area = NULL;
 			__free_pages(page, 0);
 		}
 
@@ -1731,8 +1732,10 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 			const void *caller)
 {
 	struct vm_struct *area;
+	struct vmap_area *va;
 	void *addr;
 	unsigned long real_size = size;
+	unsigned int i;
 
 	size = PAGE_ALIGN(size);
 	if (!size || (size >> PAGE_SHIFT) > totalram_pages)
@@ -1746,6 +1749,10 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 	addr = __vmalloc_area_node(area, gfp_mask, prot, node);
 	if (!addr)
 		return NULL;
+
+	va = __find_vmap_area((unsigned long)addr);
+	for (i = 0; i < va->vm->nr_pages; i++)
+		va->vm->pages[i]->area = va;
 
 	/*
 	 * In this function, newly allocated vm_struct has VM_UNINITIALIZED
