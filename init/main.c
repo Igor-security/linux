@@ -1054,6 +1054,7 @@ static inline void mark_readonly(void)
 }
 #endif
 
+int test_static_rare_write(void);
 static int __ref kernel_init(void *unused)
 {
 	int ret;
@@ -1065,6 +1066,7 @@ static int __ref kernel_init(void *unused)
 	jump_label_invalidate_initmem();
 	free_initmem();
 	mark_readonly();
+	test_static_rare_write();
 	system_state = SYSTEM_RUNNING;
 	numa_default_policy();
 
