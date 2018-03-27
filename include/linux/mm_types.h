@@ -87,13 +87,24 @@ struct page {
 			/* See page-flags.h for PAGE_MAPPING_FLAGS */
 			struct address_space *mapping;
 			pgoff_t index;		/* Our offset within mapping. */
-			/**
-			 * @private: Mapping-private opaque data.
-			 * Usually used for buffer_heads if PagePrivate.
-			 * Used for swp_entry_t if PageSwapCache.
-			 * Indicates order in the buddy system if PageBuddy.
-			 */
-			unsigned long private;
+			union {
+				/**
+				 * @private: Mapping-private opaque data.
+				 * Usually used for buffer_heads if
+				 * PagePrivate.
+				 * Used for swp_entry_t if PageSwapCache.
+				 * Indicates order in the buddy system if
+				 * PageBuddy.
+				 */
+				unsigned long private;
+				/**
+				 * @area: reference to the containing area
+				 * For pages that are mapped into a virtually
+				 * contiguous area, avoids performing a more
+				 * expensive lookup.
+				 */
+				struct vmap_area *area;
+			};
 		};
 		struct {	/* slab, slob and slub */
 			union {
