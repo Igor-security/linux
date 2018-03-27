@@ -678,7 +678,6 @@ asmlinkage __visible void __init start_kernel(void)
 	 * not cause "plain-text" data to be decrypted when accessed.
 	 */
 	mem_encrypt_init();
-
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (initrd_start && !initrd_below_start_ok &&
 	    page_to_pfn(virt_to_page((void *)initrd_start)) < min_low_pfn) {
