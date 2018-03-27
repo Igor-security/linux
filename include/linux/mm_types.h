@@ -94,6 +94,13 @@ struct page {
 			 * Indicates order in the buddy system if PageBuddy.
 			 */
 			unsigned long private;
+			/**
+			 * @area: reference to the containing area
+			 * For pages that are mapped into a virtually
+			 * contiguous area, avoids performing a more
+			 * expensive lookup.
+			 */
+			struct vm_struct *area;
 		};
 		struct {	/* slab, slob and slub */
 			union {
