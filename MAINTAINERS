@@ -9457,6 +9457,7 @@ M:	Igor Stoppa <igor.stoppa@huawei.com>
 L:	linux-mm@kvack.org
 S:	Maintained
 F:	include/linux/prmem.h
+F:	mm/prmem.c
 
 MEMORY TECHNOLOGY DEVICES (MTD)
 M:	David Woodhouse <dwmw2@infradead.org>
