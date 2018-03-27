@@ -20,6 +20,10 @@
 #include <linux/sched/task.h>
 #include <linux/sched/task_stack.h>
 #include <linux/thread_info.h>
+#include <linux/init.h>
+#include <linux/debugfs.h>
+#include <linux/pmalloc.h>
+#include <linux/sched/clock.h>
 #include <asm/sections.h>
 
 /*
@@ -240,6 +244,52 @@ static inline void check_heap_object(const void *ptr, unsigned long n,
 	}
 }
 
+#ifdef CONFIG_PROTECTABLE_MEMORY
+
+static inline int is_pmalloc_object(const void *ptr, const unsigned long n)
+{
+	struct vm_struct *area;
+	unsigned long start = (unsigned long)ptr;
+	unsigned long end = start + n;
+	unsigned long area_end;
+
+	if (likely(!is_vmalloc_addr(ptr)))
+		return false;
+
+	area = vmalloc_to_page(ptr)->area;
+	if (unlikely(!(area->flags & VM_PMALLOC)))
+		return false;
+
+	area_end = area->nr_pages * PAGE_SIZE + (unsigned long)area->addr;
+	return (start <= end) && (end <= area_end);
+}
+
+static inline void check_pmalloc_object(const void *ptr, unsigned long n,
+					bool to_user)
+{
+	int retv;
+
+	retv = is_pmalloc_object(ptr, n);
+	if (unlikely(retv)) {
+		if (unlikely(!to_user))
+			usercopy_abort("pmalloc",
+				       "trying to write to pmalloc object",
+				       to_user, (const unsigned long)ptr, n);
+		if (retv < 0)
+			usercopy_abort("pmalloc",
+				       "invalid pmalloc object",
+				       to_user, (const unsigned long)ptr, n);
+	}
+}
+
+#else
+
+static inline void check_pmalloc_object(const void *ptr, unsigned long n,
+					bool to_user)
+{
+}
+#endif
+
 /*
  * Validates that the given object is:
  * - not bogus address
@@ -277,5 +327,8 @@ void __check_object_size(const void *ptr, unsigned long n, bool to_user)
 
 	/* Check for object in kernel to avoid text exposure. */
 	check_kernel_text_object((const unsigned long)ptr, n, to_user);
+
+	/* Check if object is from a pmalloc chunk. */
+	check_pmalloc_object(ptr, n, to_user);
 }
 EXPORT_SYMBOL(__check_object_size);
