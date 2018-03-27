@@ -51,14 +51,17 @@ static __always_inline bool __is_wr_after_init(const void *ptr, size_t size)
 
 static __always_inline bool __is_wr_pool(const void *ptr, size_t size)
 {
-	struct vmap_area *area;
+	struct vm_struct *vm;
+	struct page *page;
 
 	if (!is_vmalloc_addr(ptr))
 		return false;
-	area = find_vmap_area((unsigned long)ptr);
-	return area && area->vm && (area->vm->size >= size) &&
-		((area->vm->flags & (VM_PMALLOC | VM_PMALLOC_WR)) ==
-		 (VM_PMALLOC | VM_PMALLOC_WR));
+	page = vmalloc_to_page(ptr);
+	if (!(page && page->area && page->area->vm))
+		return false;
+	vm = page->area->vm;
+	return ((vm->size >= size) &&
+		((vm->flags & VM_PMALLOC_WR_MASK) == VM_PMALLOC_WR_MASK));
 }
 
 /**
