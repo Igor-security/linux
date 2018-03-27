@@ -144,7 +144,7 @@ static int grow(struct pmalloc_pool *pool, size_t min_size)
 	if (WARN(!addr, "Failed to allocate %zd bytes", PAGE_ALIGN(size)))
 		return -ENOMEM;
 
-	new_area = find_vmap_area((uintptr_t)addr);
+	new_area = vmalloc_to_page(addr)->area;
 	tag_mask = VM_PMALLOC;
 	if (pool->mode & PMALLOC_WR)
 		tag_mask |= VM_PMALLOC_WR;

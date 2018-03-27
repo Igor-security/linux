@@ -38,15 +38,12 @@ static bool is_address_protected(void *p)
 	if (unlikely(!is_vmalloc_addr(p)))
 		return false;
 	page = vmalloc_to_page(p);
-	if (unlikely(!page))
+	if (unlikely(!(page && page->area && page->area->vm)))
 		return false;
 	wmb(); /* Flush changes to the page table - is it needed? */
-	area = find_vmap_area((uintptr_t)p);
-	if (unlikely((!area) || (!area->vm) ||
-		     ((area->vm->flags & VM_PMALLOC_PROTECTED_MASK) !=
-		      VM_PMALLOC_PROTECTED_MASK)))
-		return false;
-	return true;
+	area = page->area;
+	return (area->vm->flags & VM_PMALLOC_PROTECTED_MASK) ==
+		VM_PMALLOC_PROTECTED_MASK;
 }
 
 static bool create_and_destroy_pool(void)
