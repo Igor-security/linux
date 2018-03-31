@@ -42,7 +42,7 @@
 #define PMALLOC_REFILL_DEFAULT (0)
 #define PMALLOC_ALIGN_DEFAULT ARCH_KMALLOC_MINALIGN
 
-struct pmalloc_pool *pmalloc_create_custom_pool(unsigned long int refill,
+struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
 						unsigned short align_order);
 
 /**
