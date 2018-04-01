@@ -27,9 +27,9 @@ struct pmalloc_pool {
 	struct mutex mutex;
 	struct list_head pool_node;
 	struct llist_head vm_areas;
-	size_t refill;
-	size_t offset;
-	size_t align;
+	unsigned long refill;
+	unsigned long offset;
+	unsigned long align;
 };
 
 static LIST_HEAD(pools_list);
@@ -84,8 +84,8 @@ static inline bool protected(struct pmalloc_pool *pool)
 
 static inline bool exhausted(struct pmalloc_pool *pool, size_t size)
 {
-	size_t space_before;
-	size_t space_after;
+	unsigned long space_before;
+	unsigned long space_after;
 
 	space_before = round_down(pool->offset, pool->align);
 	space_after = pool->offset - space_before;
@@ -113,7 +113,7 @@ static inline bool space_needed(struct pmalloc_pool *pool, size_t size)
  * * pointer to the new pool	- success
  * * NULL			- error
  */
-struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
+struct pmalloc_pool *pmalloc_create_custom_pool(unsigned long refill,
 						unsigned short align_order)
 {
 	struct pmalloc_pool *pool;
@@ -174,7 +174,7 @@ static unsigned long reserve_mem(struct pmalloc_pool *pool, size_t size)
  */
 void *pmalloc(struct pmalloc_pool *pool, size_t size)
 {
-	size_t retval = 0;
+	unsigned long retval = 0;
 
 	mutex_lock(&pool->mutex);
 	if (unlikely(space_needed(pool, size)) &&
