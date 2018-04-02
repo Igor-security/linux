@@ -1,13 +1,13 @@
 Version: 1
-Previous: 85df0c82c23cba6e9c71ff341220bba7b2e75185
-Head: efc66290ea8589dcaa5a03022e35cf714e6ee1b1
+Previous: 2963405d6b9cb874d4d8481239d01974dccfc4e0
+Head: b0f877ca3a629be7a804041ec3bde76459c0fb47
 Applied:
   struct-page-add-field-for: 930f334f26131e299edbc5dafe08e3ac92d2cfcb
   vmalloc-rename-llist-field-in: efc66290ea8589dcaa5a03022e35cf714e6ee1b1
+  protectable-memory: 5998fc7cc3eda358dbbb730908c52494e9aa91ca
+  pmalloc-selftest: 67d3410da7c4218690efe46b1abcd23538ebb70c
+  lkdtm-crash-on-overwriting: 1052873d3a6002eadc32d36f69af88e867cbbf96
+  documentation-for-pmalloc: e2c757ca4350d8377dbe405e95b77b29fea3268d
+  fix: b0f877ca3a629be7a804041ec3bde76459c0fb47
 Unapplied:
-  protectable-memory: f123fc2e6e8458e56d7fc901edb2ba748d029669
-  pmalloc-selftest: c37e335d9361b2ed88404169bc455d2e6257bb1a
-  lkdtm-crash-on-overwriting: 298626e3060a3f2bd831959135b3073ef0cc4ae1
-  documentation-for-pmalloc: 733a7f5aa133cab3d53c2e9da55bdc982662a83f
-  fix: 23d96bf2975a96560ed799e6c0707970787bb8cf
 Hidden:
