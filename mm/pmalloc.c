@@ -68,7 +68,7 @@ static inline bool protect_area(struct vmap_area *area)
 static inline void destroy_area(struct vmap_area *area)
 {
 	WARN(!is_area_protected(area), "Destroying unprotected area.");
-//	set_memory_rw(area->va_start, area->vm->nr_pages); //XXX Skip it?
+	set_memory_rw(area->va_start, area->vm->nr_pages); //XXX Skip it?
 	vfree((void *)area->va_start);
 }
 
