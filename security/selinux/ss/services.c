@@ -52,6 +52,7 @@
 #include <linux/selinux.h>
 #include <linux/flex_array.h>
 #include <linux/vmalloc.h>
+#include <linux/pmalloc.h>
 #include <net/netlabel.h>
 
 #include "flask.h"
@@ -91,7 +92,8 @@ static DEFINE_RWLOCK(policy_rwlock);
 
 static struct sidtab sidtab;
 struct policydb policydb;
-int ss_initialized;
+int *ss_initialized_ptr __ro_after_init;
+static struct pmalloc_pool *selinux_pool;
 
 /*
  * The largest sequence number that has been used when
@@ -120,6 +122,18 @@ struct selinux_mapping {
 static struct selinux_mapping *current_mapping;
 static u16 current_mapping_size;
 
+__init void selinux_pool_init(void)
+{
+	selinux_pool = pmalloc_create_pool();
+	if (unlikely(!selinux_pool))
+		panic("SElinux: failed to create pmalloc pool.");
+	ss_initialized_ptr = pmalloc(selinux_pool,
+				     sizeof(*ss_initialized_ptr));
+	if (unlikely(!ss_initialized_ptr))
+		panic("SElinux: failed to allocate from pmalloc pool.");
+	*ss_initialized_ptr = 0;
+
+}
 static int selinux_set_mapping(struct policydb *pol,
 			       struct security_class_mapping *map,
 			       struct selinux_mapping **out_map_p,
@@ -776,7 +790,7 @@ static int security_compute_validatetrans(u32 oldsid, u32 newsid, u32 tasksid,
 	u16 tclass;
 	int rc = 0;
 
-	if (!ss_initialized)
+	if (!*ss_initialized_ptr)
 		return 0;
 
 	read_lock(&policy_rwlock);
@@ -867,7 +881,7 @@ int security_bounded_transition(u32 old_sid, u32 new_sid)
 	int index;
 	int rc;
 
-	if (!ss_initialized)
+	if (!*ss_initialized_ptr)
 		return 0;
 
 	read_lock(&policy_rwlock);
@@ -1021,7 +1035,7 @@ void security_compute_xperms_decision(u32 ssid,
 	memset(xpermd->dontaudit->p, 0, sizeof(xpermd->dontaudit->p));
 
 	read_lock(&policy_rwlock);
-	if (!ss_initialized)
+	if (!*ss_initialized_ptr)
 		goto allow;
 
 	scontext = sidtab_search(&sidtab, ssid);
@@ -1103,7 +1117,7 @@ void security_compute_av(u32 ssid,
 	read_lock(&policy_rwlock);
 	avd_init(avd);
 	xperms->len = 0;
-	if (!ss_initialized)
+	if (!*ss_initialized_ptr)
 		goto allow;
 
 	scontext = sidtab_search(&sidtab, ssid);
@@ -1149,7 +1163,7 @@ void security_compute_av_user(u32 ssid,
 
 	read_lock(&policy_rwlock);
 	avd_init(avd);
-	if (!ss_initialized)
+	if (!*ss_initialized_ptr)
 		goto allow;
 
 	scontext = sidtab_search(&sidtab, ssid);
@@ -1259,7 +1273,7 @@ static int security_sid_to_context_core(u32 sid, char **scontext,
 		*scontext = NULL;
 	*scontext_len  = 0;
 
-	if (!ss_initialized) {
+	if (!*ss_initialized_ptr) {
 		if (sid <= SECINITSID_NUM) {
 			char *scontextp;
 
@@ -1421,7 +1435,7 @@ static int security_context_to_sid_core(const char *scontext, u32 scontext_len,
 	if (!scontext2)
 		return -ENOMEM;
 
-	if (!ss_initialized) {
+	if (!*ss_initialized_ptr) {
 		int i;
 
 		for (i = 1; i < SECINITSID_NUM; i++) {
@@ -1591,7 +1605,7 @@ static int security_compute_sid(u32 ssid,
 	int rc = 0;
 	bool sock;
 
-	if (!ss_initialized) {
+	if (!*ss_initialized_ptr) {
 		switch (orig_tclass) {
 		case SECCLASS_PROCESS: /* kernel value */
 			*out_sid = ssid;
@@ -2058,7 +2072,7 @@ int security_load_policy(void *data, size_t len)
 	}
 	newpolicydb = oldpolicydb + 1;
 
-	if (!ss_initialized) {
+	if (!*ss_initialized_ptr) {
 		avtab_cache_init();
 		ebitmap_cache_init();
 		hashtab_cache_init();
@@ -2092,7 +2106,7 @@ int security_load_policy(void *data, size_t len)
 		}
 
 		security_load_policycaps();
-		ss_initialized = 1;
+		*ss_initialized_ptr = 1;
 		seqno = ++latest_granting;
 		selinux_complete_init();
 		avc_ss_reset(seqno);
@@ -2100,6 +2114,7 @@ int security_load_policy(void *data, size_t len)
 		selinux_status_update_policyload(seqno);
 		selinux_netlbl_cache_invalidate();
 		selinux_xfrm_notify_policyload();
+		pmalloc_protect_pool(selinux_pool);
 		goto out;
 	}
 
@@ -2183,6 +2198,7 @@ int security_load_policy(void *data, size_t len)
 	selinux_xfrm_notify_policyload();
 
 	rc = 0;
+	pmalloc_protect_pool(selinux_pool);
 	goto out;
 
 err:
@@ -2487,7 +2503,7 @@ int security_get_user_sids(u32 fromsid,
 	*sids = NULL;
 	*nel = 0;
 
-	if (!ss_initialized)
+	if (!*ss_initialized_ptr)
 		goto out;
 
 	read_lock(&policy_rwlock);
@@ -2858,7 +2874,7 @@ int security_sid_mls_copy(u32 sid, u32 mls_sid, u32 *new_sid)
 	int rc;
 
 	rc = 0;
-	if (!ss_initialized || !policydb.mls_enabled) {
+	if (!*ss_initialized_ptr || !policydb.mls_enabled) {
 		*new_sid = sid;
 		goto out;
 	}
@@ -2958,9 +2974,9 @@ int security_net_peersid_resolve(u32 nlbl_sid, u32 nlbl_type,
 		return 0;
 	}
 
-	/* we don't need to check ss_initialized here since the only way both
+	/* we don't need to check *ss_initialized_ptr here since the only way both
 	 * nlbl_sid and xfrm_sid are not equal to SECSID_NULL would be if the
-	 * security server was initialized and ss_initialized was true */
+	 * security server was initialized and *ss_initialized_ptr was true */
 	if (!policydb.mls_enabled)
 		return 0;
 
@@ -3149,7 +3165,7 @@ int selinux_audit_rule_init(u32 field, u32 op, char *rulestr, void **vrule)
 
 	*rule = NULL;
 
-	if (!ss_initialized)
+	if (!*ss_initialized_ptr)
 		return -EOPNOTSUPP;
 
 	switch (field) {
@@ -3444,7 +3460,7 @@ int security_netlbl_secattr_to_sid(struct netlbl_lsm_secattr *secattr,
 	struct context *ctx;
 	struct context ctx_new;
 
-	if (!ss_initialized) {
+	if (!*ss_initialized_ptr) {
 		*sid = SECSID_NULL;
 		return 0;
 	}
@@ -3509,7 +3525,7 @@ int security_netlbl_sid_to_secattr(u32 sid, struct netlbl_lsm_secattr *secattr)
 	int rc;
 	struct context *ctx;
 
-	if (!ss_initialized)
+	if (!*ss_initialized_ptr)
 		return 0;
 
 	read_lock(&policy_rwlock);
@@ -3546,7 +3562,7 @@ int security_read_policy(void **data, size_t *len)
 	int rc;
 	struct policy_file fp;
 
-	if (!ss_initialized)
+	if (!*ss_initialized_ptr)
 		return -EINVAL;
 
 	*len = security_policydb_len();
