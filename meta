@@ -1,6 +1,7 @@
 Version: 1
-Previous: None
+Previous: b35e31af2e83b8ea756713153760e942d1045b3a
 Head: eab56352e4b40ce676f7e92f38bb16042585bf70
 Applied:
+  protection-of-the-selinux: eab56352e4b40ce676f7e92f38bb16042585bf70
 Unapplied:
 Hidden:
