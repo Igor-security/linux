@@ -20,6 +20,10 @@
 #include <linux/sched/task.h>
 #include <linux/sched/task_stack.h>
 #include <linux/thread_info.h>
+#include <linux/init.h>
+#include <linux/debugfs.h>
+#include <linux/pmalloc.h>
+#include <linux/sched/clock.h>
 #include <asm/sections.h>
 
 /*
@@ -242,14 +246,30 @@ static inline void check_heap_object(const void *ptr, unsigned long n,
 
 #ifdef CONFIG_PROTECTABLE_MEMORY
 
+inline int is_pmalloc_object_local(const void *ptr, const unsigned long n)
+{
+	struct vm_struct *area;
+
+	if (likely(!is_vmalloc_addr(ptr)))
+		return false;
+
+	area = vmalloc_to_page(ptr)->area;
+	if (unlikely(!(area->flags & VM_PMALLOC)))
+		return false;
+
+	return ((n + (unsigned long)ptr) <=
+		(area->nr_pages * PAGE_SIZE + (unsigned long)area->addr));
+
+}
+
 int is_pmalloc_object(const void *ptr, const unsigned long n);
 
-static void check_pmalloc_object(const void *ptr, unsigned long n,
+inline static void check_pmalloc_object(const void *ptr, unsigned long n,
 				 bool to_user)
 {
 	int retv;
 
-	retv = is_pmalloc_object(ptr, n);
+	retv = is_pmalloc_object_local(ptr, n);
 	if (unlikely(retv)) {
 		if (unlikely(!to_user))
 			usercopy_abort("pmalloc",
@@ -264,7 +284,7 @@ static void check_pmalloc_object(const void *ptr, unsigned long n,
 
 #else
 
-static void check_pmalloc_object(const void *ptr, unsigned long n,
+inline static void check_pmalloc_object(const void *ptr, unsigned long n,
 				 bool to_user)
 {
 }
@@ -312,3 +332,168 @@ void __check_object_size(const void *ptr, unsigned long n, bool to_user)
 	check_pmalloc_object(ptr, n, to_user);
 }
 EXPORT_SYMBOL(__check_object_size);
+
+#define AREAS 128
+struct area {
+	void *address;
+	unsigned long long size;
+	unsigned long long with;
+	unsigned long long without;
+};
+
+static struct dentry *dir;
+static struct dentry *with;
+static struct dentry *without;
+static struct dentry *dir;
+static unsigned long meas_with = 5;
+static unsigned long meas_without = 7;
+static struct area *areas;
+static struct pmalloc_pool *pool;
+
+static int prepare_debugfs(void)
+{
+	dir = debugfs_create_dir("measurements", 0);
+	if (unlikely(!dir))
+		return -1;
+	with = debugfs_create_ulong("with", 0666, dir, &meas_with);
+	if (unlikely(!with))
+		goto error;
+	without = debugfs_create_ulong("without", 0666, dir, &meas_without);
+	if (unlikely(!without))
+		goto error;
+	return 0;
+error:
+	debugfs_remove_recursive(dir);
+	return -1;
+}
+
+static bool prepare_areas(void)
+{
+	int i;
+	size_t size;
+
+	areas = vmalloc(sizeof(struct area) * AREAS);
+	if (unlikely(!areas))
+		return false;
+
+	pool = pmalloc_create_pool();
+	if (unlikely(!pool)) {
+		vfree(areas);
+		return false;
+	}
+
+	for (i = 0; i < AREAS; i++) {
+		size = PAGE_SIZE << (i & 3);
+		areas[i].address = pmalloc(pool, size);
+		if (unlikely(!areas[i].address)) {
+			pmalloc_destroy_pool(pool);
+			vfree(areas);
+			return false;
+		}
+		areas[i].size = size;
+	}
+	return true;
+}
+
+static inline void do_measurement_with(int i)
+{
+	unsigned long long start;
+	unsigned long long end;
+	bool to_user = 1;
+	void *ptr = areas[i].address;
+	unsigned long n = areas[i].size - 1;
+
+	start = sched_clock();
+	/* Check for invalid addresses. */
+	check_bogus_address((const unsigned long)ptr, n, to_user);
+
+	/* Check if object is from a pmalloc chunk. */
+	check_pmalloc_object(ptr, n, to_user);
+
+	/* Check for bad heap object. */
+	check_heap_object(ptr, n, to_user);
+
+	/* Check for bad stack object. */
+	switch (check_stack_object(ptr, n)) {
+	case NOT_STACK:
+		/* Object is not touching the current process stack. */
+		break;
+	case GOOD_FRAME:
+	case GOOD_STACK:
+		/*
+		 * Object is either in the correct frame (when it
+		 * is possible to check) or just generally on the
+		 * process stack (when frame checking not available).
+		 */
+		return;
+	default:
+		usercopy_abort("process stack", NULL, to_user, 0, n);
+	}
+
+	/* Check for object in kernel to avoid text exposure. */
+	check_kernel_text_object((const unsigned long)ptr, n, to_user);
+
+	end = sched_clock();
+	areas[i].with = end - start;
+}
+
+static inline void do_measurement_without(int i)
+{
+	unsigned long long start;
+	unsigned long long end;
+	bool to_user = 1;
+	void *ptr = areas[i].address;
+	unsigned long n = areas[i].size - 1;
+
+	start = sched_clock();
+	/* Check for invalid addresses. */
+	check_bogus_address((const unsigned long)ptr, n, to_user);
+
+	/* Check for bad heap object. */
+	check_heap_object(ptr, n, to_user);
+
+	/* Check for bad stack object. */
+	switch (check_stack_object(ptr, n)) {
+	case NOT_STACK:
+		/* Object is not touching the current process stack. */
+		break;
+	case GOOD_FRAME:
+	case GOOD_STACK:
+		/*
+		 * Object is either in the correct frame (when it
+		 * is possible to check) or just generally on the
+		 * process stack (when frame checking not available).
+		 */
+		return;
+	default:
+		usercopy_abort("process stack", NULL, to_user, 0, n);
+	}
+
+	/* Check for object in kernel to avoid text exposure. */
+	check_kernel_text_object((const unsigned long)ptr, n, to_user);
+
+	end = sched_clock();
+	areas[i].without = end - start;
+}
+
+static int __init measure_user_copy(void)
+{
+	int i;
+	unsigned long long tmp;
+
+	if (unlikely(prepare_debugfs() ||
+	    unlikely(!prepare_areas())))
+		return 0;
+	for (i = 0; i < AREAS; i++) {
+		do_measurement_with(i);
+		do_measurement_without(i);
+	}
+	for (tmp = 0, i = 0; i < AREAS; i++)
+		tmp += areas[i].with;
+	meas_with = (unsigned long)(tmp / AREAS);
+	for (tmp = 0, i = 0; i < AREAS; i++)
+		tmp += areas[i].without;
+	meas_without = (unsigned long)(tmp / AREAS);
+	return 0;
+}
+core_initcall(measure_user_copy);
