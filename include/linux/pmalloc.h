@@ -160,7 +160,4 @@ void pmalloc_protect_pool(struct pmalloc_pool *pool);
 
 
 void pmalloc_destroy_pool(struct pmalloc_pool *pool);
-
-
-int is_pmalloc_object(const void *ptr, const unsigned long n);
 #endif

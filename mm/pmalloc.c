@@ -212,32 +212,6 @@ void pmalloc_protect_pool(struct pmalloc_pool *pool)
 
 
 /**
- * is_pmalloc_object() - test if the given range is within a pmalloc pool
- * @ptr: the base address of the range
- * @n: the size of the range
- *
- * Return:
- * * true	- the range given is fully within a pmalloc pool
- * * false	- the range given is not fully within a pmalloc pool
- */
-int is_pmalloc_object(const void *ptr, const unsigned long n)
-{
-	struct vm_struct *area;
-
-	if (likely(!is_vmalloc_addr(ptr)))
-		return false;
-
-	area = vmalloc_to_page(ptr)->area;
-	if (unlikely(!(area->flags & VM_PMALLOC)))
-		return false;
-
-	return ((n + (unsigned long)ptr) <=
-		(area->nr_pages * PAGE_SIZE + (unsigned long)area->addr));
-
-}
-
-
-/**
  * pmalloc_destroy_pool() - destroys a pool and all the associated memory
  * @pool: the pool to destroy
  *

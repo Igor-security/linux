@@ -246,7 +246,7 @@ static inline void check_heap_object(const void *ptr, unsigned long n,
 
 #ifdef CONFIG_PROTECTABLE_MEMORY
 
-inline int is_pmalloc_object_local(const void *ptr, const unsigned long n)
+static inline int is_pmalloc_object(const void *ptr, const unsigned long n)
 {
 	struct vm_struct *area;
 
@@ -262,14 +262,12 @@ inline int is_pmalloc_object_local(const void *ptr, const unsigned long n)
 
 }
 
-int is_pmalloc_object(const void *ptr, const unsigned long n);
-
-inline static void check_pmalloc_object(const void *ptr, unsigned long n,
-				 bool to_user)
+static inline void check_pmalloc_object(const void *ptr, unsigned long n,
+					bool to_user)
 {
 	int retv;
 
-	retv = is_pmalloc_object_local(ptr, n);
+	retv = is_pmalloc_object(ptr, n);
 	if (unlikely(retv)) {
 		if (unlikely(!to_user))
 			usercopy_abort("pmalloc",
@@ -284,8 +282,8 @@ inline static void check_pmalloc_object(const void *ptr, unsigned long n,
 
 #else
 
-inline static void check_pmalloc_object(const void *ptr, unsigned long n,
-				 bool to_user)
+static inline void check_pmalloc_object(const void *ptr, unsigned long n,
+					bool to_user)
 {
 }
 #endif
