@@ -249,6 +249,9 @@ static inline void check_heap_object(const void *ptr, unsigned long n,
 static inline int is_pmalloc_object(const void *ptr, const unsigned long n)
 {
 	struct vm_struct *area;
+	unsigned long start = (unsigned long)ptr;
+	unsigned long end = start + n;
+	unsigned long area_end;
 
 	if (likely(!is_vmalloc_addr(ptr)))
 		return false;
@@ -257,9 +260,8 @@ static inline int is_pmalloc_object(const void *ptr, const unsigned long n)
 	if (unlikely(!(area->flags & VM_PMALLOC)))
 		return false;
 
-	return ((n + (unsigned long)ptr) <=
-		(area->nr_pages * PAGE_SIZE + (unsigned long)area->addr));
-
+	area_end = area->nr_pages * PAGE_SIZE + (unsigned long)area->addr;
+	return ((start <= end) && (end <= area_end);
 }
 
 static inline void check_pmalloc_object(const void *ptr, unsigned long n,

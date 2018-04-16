@@ -56,19 +56,18 @@ static inline bool is_area_protected(struct vmap_area *area)
 	return area->vm->flags & VM_PMALLOC_PROTECTED;
 }
 
-static inline bool protect_area(struct vmap_area *area)
+static inline void protect_area(struct vmap_area *area)
 {
 	if (unlikely(is_area_protected(area)))
-		return false;
+		return;
 	set_memory_ro(area->va_start, area->vm->nr_pages);
 	area->vm->flags |= VM_PMALLOC_PROTECTED;
-	return true;
 }
 
 static inline void destroy_area(struct vmap_area *area)
 {
 	WARN(!is_area_protected(area), "Destroying unprotected area.");
-	area->vm->flags &= ~(VM_PMALLOC_PROTECTED | VM_PMALLOC_PROTECTED);
+	area->vm->flags &= ~(VM_PMALLOC | VM_PMALLOC_PROTECTED);
 	set_memory_rw(area->va_start, area->vm->nr_pages);
 	vfree((void *)area->va_start);
 }
@@ -132,14 +131,17 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
 	mutex_unlock(&pools_mutex);
 	return pool;
 }
+EXPORT_SYMBOL(pmalloc_create_custom_pool);
 
 
-static int grow(struct pmalloc_pool *pool, size_t size)
+static int grow(struct pmalloc_pool *pool, size_t min_size)
 {
 	void *addr;
 	struct vmap_area *area;
+	unsigned long size;
 
-	addr = vmalloc(max(size, pool->refill));
+	size = (min_size > pool->refill) ? min_size : pool->refill;
+	addr = vmalloc(size);
 	if (WARN(!addr, "Failed to allocate %zd bytes", PAGE_ALIGN(size)))
 		return -ENOMEM;
 
@@ -150,10 +152,10 @@ static int grow(struct pmalloc_pool *pool, size_t size)
 	return 0;
 }
 
-static unsigned long reserve_mem(struct pmalloc_pool *pool, size_t size)
+static void *reserve_mem(struct pmalloc_pool *pool, size_t size)
 {
 	pool->offset = round_down(pool->offset - size, pool->align);
-	return current_area(pool)->va_start + pool->offset;
+	return (void *)(current_area(pool)->va_start + pool->offset);
 
 }
 
@@ -175,7 +177,7 @@ static unsigned long reserve_mem(struct pmalloc_pool *pool, size_t size)
  */
 void *pmalloc(struct pmalloc_pool *pool, size_t size)
 {
-	size_t retval = 0;
+	void *retval = NULL;
 
 	mutex_lock(&pool->mutex);
 	if (unlikely(space_needed(pool, size)) &&
@@ -184,8 +186,9 @@ void *pmalloc(struct pmalloc_pool *pool, size_t size)
 	retval = reserve_mem(pool, size);
 out:
 	mutex_unlock(&pool->mutex);
-	return (void *)retval;
+	return retval;
 }
+EXPORT_SYMBOL(pmalloc);
 
 /**
  * pmalloc_protect_pool() - write-protects the memory in the pool
@@ -205,10 +208,10 @@ void pmalloc_protect_pool(struct pmalloc_pool *pool)
 
 	mutex_lock(&pool->mutex);
 	llist_for_each_entry(area, pool->vm_areas.first, area_list)
-		if (unlikely(!protect_area(area)))
-			break;
+		protect_area(area);
 	mutex_unlock(&pool->mutex);
 }
+EXPORT_SYMBOL(pmalloc_protect_pool);
 
 
 /**
@@ -237,3 +240,4 @@ void pmalloc_destroy_pool(struct pmalloc_pool *pool)
 		destroy_area(area);
 	}
 }
+EXPORT_SYMBOL(pmalloc_destroy_pool);
