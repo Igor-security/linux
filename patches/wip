@@ -1,0 +1,41 @@
+Bottom: 01880b639275b8d2da7920cc0a7437cd692f9956
+Top:    ec4b29259cb50d1933ffd36327896e1b80d65541
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-04-16 20:29:40 +0400
+
+wip
+
+
+---
+
+diff --git a/include/linux/vmalloc.h b/include/linux/vmalloc.h
+index 69c12f21200f..649a3dd01e31 100644
+--- a/include/linux/vmalloc.h
++++ b/include/linux/vmalloc.h
+@@ -21,7 +21,8 @@ struct notifier_block;		/* in notifier.h */
+ #define VM_NO_GUARD		0x00000040      /* don't add guard page */
+ #define VM_KASAN		0x00000080      /* has allocated kasan shadow memory */
+ #define VM_PMALLOC		0x00000100	/* pmalloc area - see docs */
+-#define VM_PMALLOC_PROTECTED	0x00000200	/* protected area - see docs */
++#define VM_PMALLOC_RW		0x00000200	/* rewritable area - see docs */
++#define VM_PMALLOC_PROTECTED	0x00000400	/* protected area - see docs */
+ /* bits [20..32] reserved for arch specific ioremap internals */
+ 
+ /*
+diff --git a/mm/pmalloc.c b/mm/pmalloc.c
+index 3764ee86e4da..b97563ad700e 100644
+--- a/mm/pmalloc.c
++++ b/mm/pmalloc.c
+@@ -237,3 +237,12 @@ void pmalloc_destroy_pool(struct pmalloc_pool *pool)
+ 		destroy_area(area);
+ 	}
+ }
++
++
++
++int __init pmalloc_tst(void)
++{
++	pr_info("cippalippa");
++}
++
++core_initcall(pmalloc_tst);
