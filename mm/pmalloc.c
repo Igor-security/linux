@@ -237,3 +237,12 @@ void pmalloc_destroy_pool(struct pmalloc_pool *pool)
 		destroy_area(area);
 	}
 }
+
+
+
+int __init pmalloc_tst(void)
+{
+	pr_info("cippalippa");
+}
+
+core_initcall(pmalloc_tst);
