@@ -261,7 +261,7 @@ static inline int is_pmalloc_object(const void *ptr, const unsigned long n)
 		return false;
 
 	area_end = area->nr_pages * PAGE_SIZE + (unsigned long)area->addr;
-	return ((start <= end) && (end <= area_end);
+	return (start <= end) && (end <= area_end);
 }
 
 static inline void check_pmalloc_object(const void *ptr, unsigned long n,
