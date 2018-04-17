@@ -115,7 +115,7 @@ void lkdtm_WRITE_RO_PMALLOC(void)
 	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
 		return;
 
-	i = (int *)pmalloc(pool, sizeof(int));
+	i = pmalloc(pool, sizeof(int));
 	if (WARN(!i, "Failed allocating memory for pmalloc test.")) {
 		pmalloc_destroy_pool(pool);
 		return;
