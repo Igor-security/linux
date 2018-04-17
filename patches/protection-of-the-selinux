@@ -1,0 +1,283 @@
+Bottom: 7ffe0d0f2a1c4520ea62660e566337c03b193a14
+Top:    3ea92cde7e42b4f506ff7386c079f810c0d16b2f
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-04-12 20:13:45 +0400
+
+Protection of the SELinux "initialized" state
+
+This patch reworks the "initialized" state into a form which can be
+protected by using both __ro_after_init and pmalloc, combined.
+
+The outcome is that the state is permanently set, once a policy is
+loaded.
+
+This patch requires some more work, to better integrate the protection,
+but it shows how to counter a very typical attack on SELinux, with
+the use of pmalloc.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+
+---
+
+diff --git a/security/selinux/hooks.c b/security/selinux/hooks.c
+index 4cafe6a19167..6049f80115bc 100644
+--- a/security/selinux/hooks.c
++++ b/security/selinux/hooks.c
+@@ -285,7 +285,7 @@ static int __inode_security_revalidate(struct inode *inode,
+ 
+ 	might_sleep_if(may_sleep);
+ 
+-	if (selinux_state.initialized &&
++	if (*ss_initialized_ptr &&
+ 	    isec->initialized != LABEL_INITIALIZED) {
+ 		if (!may_sleep)
+ 			return -ECHILD;
+@@ -612,7 +612,7 @@ static int selinux_get_mnt_opts(const struct super_block *sb,
+ 	if (!(sbsec->flags & SE_SBINITIALIZED))
+ 		return -EINVAL;
+ 
+-	if (!selinux_state.initialized)
++	if (!*ss_initialized_ptr)
+ 		return -EINVAL;
+ 
+ 	/* make sure we always check enough bits to cover the mask */
+@@ -735,7 +735,7 @@ static int selinux_set_mnt_opts(struct super_block *sb,
+ 
+ 	mutex_lock(&sbsec->lock);
+ 
+-	if (!selinux_state.initialized) {
++	if (!*ss_initialized_ptr) {
+ 		if (!num_opts) {
+ 			/* Defer initialization until selinux_complete_init,
+ 			   after the initial policy is loaded and the security
+@@ -1022,7 +1022,7 @@ static int selinux_sb_clone_mnt_opts(const struct super_block *oldsb,
+ 	 * if the parent was able to be mounted it clearly had no special lsm
+ 	 * mount options.  thus we can safely deal with this superblock later
+ 	 */
+-	if (!selinux_state.initialized)
++	if (!*ss_initialized_ptr)
+ 		return 0;
+ 
+ 	/*
+@@ -3040,7 +3040,7 @@ static int selinux_inode_init_security(struct inode *inode, struct inode *dir,
+ 		isec->initialized = LABEL_INITIALIZED;
+ 	}
+ 
+-	if (!selinux_state.initialized || !(sbsec->flags & SBLABEL_MNT))
++	if (!*ss_initialized_ptr || !(sbsec->flags & SBLABEL_MNT))
+ 		return -EOPNOTSUPP;
+ 
+ 	if (name)
+@@ -7253,7 +7253,7 @@ static void selinux_nf_ip_exit(void)
+ #ifdef CONFIG_SECURITY_SELINUX_DISABLE
+ int selinux_disable(struct selinux_state *state)
+ {
+-	if (state->initialized) {
++	if (*ss_initialized_ptr) {
+ 		/* Not permitted after initial policy load. */
+ 		return -EINVAL;
+ 	}
+diff --git a/security/selinux/include/security.h b/security/selinux/include/security.h
+index 23e762d529fa..ec7debb143be 100644
+--- a/security/selinux/include/security.h
++++ b/security/selinux/include/security.h
+@@ -96,13 +96,13 @@ extern char *selinux_policycap_names[__POLICYDB_CAPABILITY_MAX];
+ struct selinux_avc;
+ struct selinux_ss;
+ 
++extern bool *ss_initialized_ptr;
+ struct selinux_state {
+ 	bool disabled;
+ #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
+ 	bool enforcing;
+ #endif
+ 	bool checkreqprot;
+-	bool initialized;
+ 	bool policycap[__POLICYDB_CAPABILITY_MAX];
+ 	struct selinux_avc *avc;
+ 	struct selinux_ss *ss;
+diff --git a/security/selinux/ss/services.c b/security/selinux/ss/services.c
+index 8057e19dc15f..a92382146e8c 100644
+--- a/security/selinux/ss/services.c
++++ b/security/selinux/ss/services.c
+@@ -52,6 +52,7 @@
+ #include <linux/selinux.h>
+ #include <linux/flex_array.h>
+ #include <linux/vmalloc.h>
++#include <linux/pmalloc.h>
+ #include <net/netlabel.h>
+ 
+ #include "flask.h"
+@@ -80,10 +81,19 @@ char *selinux_policycap_names[__POLICYDB_CAPABILITY_MAX] = {
+ 	"nnp_nosuid_transition"
+ };
+ 
++bool *ss_initialized_ptr __ro_after_init;
++static struct pmalloc_pool *selinux_pool;
+ static struct selinux_ss selinux_ss;
+ 
+ void selinux_ss_init(struct selinux_ss **ss)
+ {
++	selinux_pool = pmalloc_create_pool();
++	if (unlikely(!selinux_pool))
++		panic("SELinux: unable to create pmalloc pool.");
++	ss_initialized_ptr = pmalloc(selinux_pool, sizeof(bool));
++	if (unlikely(!ss_initialized_ptr))
++		panic("SElinux: unable to allocate from pmalloc pool.");
++	*ss_initialized_ptr = false;
+ 	rwlock_init(&selinux_ss.policy_rwlock);
+ 	mutex_init(&selinux_ss.status_lock);
+ 	*ss = &selinux_ss;
+@@ -772,7 +782,7 @@ static int security_compute_validatetrans(struct selinux_state *state,
+ 	int rc = 0;
+ 
+ 
+-	if (!state->initialized)
++	if (!*ss_initialized_ptr)
+ 		return 0;
+ 
+ 	read_lock(&state->ss->policy_rwlock);
+@@ -872,7 +882,7 @@ int security_bounded_transition(struct selinux_state *state,
+ 	int index;
+ 	int rc;
+ 
+-	if (!state->initialized)
++	if (!*ss_initialized_ptr)
+ 		return 0;
+ 
+ 	read_lock(&state->ss->policy_rwlock);
+@@ -1032,7 +1042,7 @@ void security_compute_xperms_decision(struct selinux_state *state,
+ 	memset(xpermd->dontaudit->p, 0, sizeof(xpermd->dontaudit->p));
+ 
+ 	read_lock(&state->ss->policy_rwlock);
+-	if (!state->initialized)
++	if (!*ss_initialized_ptr)
+ 		goto allow;
+ 
+ 	policydb = &state->ss->policydb;
+@@ -1121,7 +1131,7 @@ void security_compute_av(struct selinux_state *state,
+ 	read_lock(&state->ss->policy_rwlock);
+ 	avd_init(state, avd);
+ 	xperms->len = 0;
+-	if (!state->initialized)
++	if (!*ss_initialized_ptr)
+ 		goto allow;
+ 
+ 	policydb = &state->ss->policydb;
+@@ -1175,7 +1185,7 @@ void security_compute_av_user(struct selinux_state *state,
+ 
+ 	read_lock(&state->ss->policy_rwlock);
+ 	avd_init(state, avd);
+-	if (!state->initialized)
++	if (!*ss_initialized_ptr)
+ 		goto allow;
+ 
+ 	policydb = &state->ss->policydb;
+@@ -1294,7 +1304,7 @@ static int security_sid_to_context_core(struct selinux_state *state,
+ 		*scontext = NULL;
+ 	*scontext_len  = 0;
+ 
+-	if (!state->initialized) {
++	if (!*ss_initialized_ptr) {
+ 		if (sid <= SECINITSID_NUM) {
+ 			char *scontextp;
+ 
+@@ -1466,7 +1476,7 @@ static int security_context_to_sid_core(struct selinux_state *state,
+ 	if (!scontext2)
+ 		return -ENOMEM;
+ 
+-	if (!state->initialized) {
++	if (!ss_initialized_ptr) {
+ 		int i;
+ 
+ 		for (i = 1; i < SECINITSID_NUM; i++) {
+@@ -1648,7 +1658,7 @@ static int security_compute_sid(struct selinux_state *state,
+ 	int rc = 0;
+ 	bool sock;
+ 
+-	if (!state->initialized) {
++	if (!*ss_initialized_ptr) {
+ 		switch (orig_tclass) {
+ 		case SECCLASS_PROCESS: /* kernel value */
+ 			*out_sid = ssid;
+@@ -2128,7 +2138,7 @@ int security_load_policy(struct selinux_state *state, void *data, size_t len)
+ 	policydb = &state->ss->policydb;
+ 	sidtab = &state->ss->sidtab;
+ 
+-	if (!state->initialized) {
++	if (!*ss_initialized_ptr) {
+ 		rc = policydb_read(policydb, fp);
+ 		if (rc)
+ 			goto out;
+@@ -2148,7 +2158,7 @@ int security_load_policy(struct selinux_state *state, void *data, size_t len)
+ 		}
+ 
+ 		security_load_policycaps(state);
+-		state->initialized = 1;
++		*ss_initialized_ptr = 1;
+ 		seqno = ++state->ss->latest_granting;
+ 		selinux_complete_init();
+ 		avc_ss_reset(state->avc, seqno);
+@@ -2156,6 +2166,7 @@ int security_load_policy(struct selinux_state *state, void *data, size_t len)
+ 		selinux_status_update_policyload(state, seqno);
+ 		selinux_netlbl_cache_invalidate();
+ 		selinux_xfrm_notify_policyload();
++		pmalloc_protect_pool(selinux_pool);
+ 		goto out;
+ 	}
+ 
+@@ -2578,7 +2589,7 @@ int security_get_user_sids(struct selinux_state *state,
+ 	*sids = NULL;
+ 	*nel = 0;
+ 
+-	if (!state->initialized)
++	if (!*ss_initialized_ptr)
+ 		goto out;
+ 
+ 	read_lock(&state->ss->policy_rwlock);
+@@ -2812,7 +2823,7 @@ int security_get_bools(struct selinux_state *state,
+ 	struct policydb *policydb;
+ 	int i, rc;
+ 
+-	if (!state->initialized) {
++	if (!*ss_initialized_ptr) {
+ 		*len = 0;
+ 		*names = NULL;
+ 		*values = NULL;
+@@ -2987,7 +2998,7 @@ int security_sid_mls_copy(struct selinux_state *state,
+ 	int rc;
+ 
+ 	rc = 0;
+-	if (!state->initialized || !policydb->mls_enabled) {
++	if (!*ss_initialized_ptr || !policydb->mls_enabled) {
+ 		*new_sid = sid;
+ 		goto out;
+ 	}
+@@ -3149,7 +3160,7 @@ int security_get_classes(struct selinux_state *state,
+ 	struct policydb *policydb = &state->ss->policydb;
+ 	int rc;
+ 
+-	if (!state->initialized) {
++	if (!*ss_initialized_ptr) {
+ 		*nclasses = 0;
+ 		*classes = NULL;
+ 		return 0;
+@@ -3298,7 +3309,7 @@ int selinux_audit_rule_init(u32 field, u32 op, char *rulestr, void **vrule)
+ 
+ 	*rule = NULL;
+ 
+-	if (!state->initialized)
++	if (!*ss_initialized_ptr)
+ 		return -EOPNOTSUPP;
+ 
+ 	switch (field) {
+@@ -3704,7 +3715,7 @@ int security_read_policy(struct selinux_state *state,
+ 	int rc;
+ 	struct policy_file fp;
+ 
+-	if (!state->initialized)
++	if (!ss_initialized_ptr)
+ 		return -EINVAL;
+ 
+ 	*len = security_policydb_len(state);

@@ -1,6 +1,8 @@
 Version: 1
-Previous: None
+Previous: 705ad6c7fe608daa3a8271271aeb68570a16883d
 Head: e90e9a1db30213f7dda6f8a7f030da54eb17e4cb
 Applied:
+  protection-of-the-selinux: af5fe9d0befc3b95bc031764b3dc65939514756c
+  measurement: e90e9a1db30213f7dda6f8a7f030da54eb17e4cb
 Unapplied:
 Hidden:
