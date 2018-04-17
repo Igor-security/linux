@@ -1,5 +1,5 @@
-Bottom: 0ba29b750cf007b7fb838e55b3d647cf4c84aea6
-Top:    01880b639275b8d2da7920cc0a7437cd692f9956
+Bottom: 2e14c70a46689e2b3f0b989350f38de7fa9cf7e2
+Top:    24d62d736feb781db8a94464e8d42ca1906bbc09
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-04-15 12:06:58 +0400
 
@@ -9,10 +9,10 @@ measurement
 ---
 
 diff --git a/mm/usercopy.c b/mm/usercopy.c
-index 9b09577003c0..3e79cf9a74bf 100644
+index 834818947218..37c770b05a3d 100644
 --- a/mm/usercopy.c
 +++ b/mm/usercopy.c
-@@ -330,3 +330,168 @@ void __check_object_size(const void *ptr, unsigned long n, bool to_user)
+@@ -332,3 +332,168 @@ void __check_object_size(const void *ptr, unsigned long n, bool to_user)
  	check_pmalloc_object(ptr, n, to_user);
  }
  EXPORT_SYMBOL(__check_object_size);

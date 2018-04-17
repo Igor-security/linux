@@ -1,9 +1,9 @@
 Version: 1
-Previous: 3d663b3281aa076d613bc0b709fc6674d0c933b1
-Head: df1784922025a8ca880111144e048fd6e57b6302
+Previous: 068c582bf34fa4095ccf784b050eddb8c5486617
+Head: effae772ab81280d785c53136cefda1ea59d10aa
 Applied:
   protection-of-the-selinux: df1784922025a8ca880111144e048fd6e57b6302
+  measurement: effae772ab81280d785c53136cefda1ea59d10aa
 Unapplied:
-  measurement: 30dec39df6d4ba429e069f41e5893e7337f070b5
   wip: 5b88d0efdccc65820dec957930034d4c0945e803
 Hidden:
