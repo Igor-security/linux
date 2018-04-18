@@ -16,7 +16,7 @@
 /*
  * Library for dynamic allocation of pools of protectable memory.
  * A pool is a single linked list of vmap_area structures.
- * Whenever a pool is protected, all the areas it contain at that point
+ * Whenever a pool is protected, all the areas it contains at that point
  * are write protected.
  * More areas can be added and protected, in the same way.
  * Memory in a pool cannot be individually unprotected, but the pool can
@@ -35,7 +35,7 @@
  * Finally, it can be useful also when it is desirable to control
  * dynamically (for example throguh the command line) if something ought
  * to be protected or not, without having to rebuild the kernel (like in
- * the build used for a linux distro).
+ * the kernel binary files provided by a linux distro).
  */
 
 
