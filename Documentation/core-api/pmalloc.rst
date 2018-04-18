@@ -10,9 +10,12 @@ Purpose
 
 The pmalloc library is meant to provide read-only status to data that,
 for some reason, could neither be declared as constant, nor could it take
-advantage of the qualifier __ro_after_init, but is write-once and
-read-only in spirit. At least as long as it doesn't get teared down.
-It protects data from both accidental and malicious overwrites.
+advantage of the qualifier __ro_after_init.
+But it is in spirit either fully write-once/read-only or at least
+write-seldom/mostly-read-only.
+At some point it might get teared down, however that doesn't affect how it
+is treated, while it's still relevant.
+Pmalloc protects data from both accidental and malicious overwrites.
 
 Example: A policy that is loaded from userspace.
 
@@ -37,8 +40,9 @@ The size chosen is the largest between the roundup (to PAGE_SIZE) of
 the request from pmalloc and friends and the refill parameter specified
 when creating the pool.
 
-When a pool is created, it is possible to specify two parameters:
+When a pool is created, it is possible to specify three parameters:
 - refill size: the minimum size of the memory area to allocate when needed
+- rewritable: if te content can be modified
 - align_order: the default alignment to use when reserving memory
 
 To facilitate the conversion of existing code to pmalloc pools, several
@@ -57,7 +61,7 @@ Caveats
 
 - As already explained, freeing of memory is not supported. Pages will be
   returned to the system upon destruction of the memory pool that they
-  belong to.
+  belong to. For this reason, no pfree() function is provided
 
 - The address range available for vmalloc (and thus for pmalloc too) is
   limited, on 32-bit systems. However it shouldn't be an issue, since not
@@ -71,12 +75,57 @@ Caveats
   to happen with such high frequency to become a problem.
 
 
-Use
----
+Use cases
+---------
+
+- Pmalloc memory is intended to complement __read_only_after_init.
+  It can be used, for example, where there is a write-once variable, for
+  which it is not possible to know the initialization value before init
+  is completed (which is what __read_only_after_init requires).
+ 
+- Pmalloc can be useful also when the amount of data to protect is not
+  known at compile time and the memory can only be allocated dynamically.
+ 
+- When it's not possible to fix a point in time after which the data
+  becomes immutable, but it's still fairly unlikely that it will change,
+  rare write becomes a less vulnerable alternative to leaving the data
+  located in freely rewritable memory.
+ 
+- Finally, it can be useful also when it is desirable to control
+  dynamically (for example throguh the kernel command line) if some
+  specific data ought to be protected or not, without having to rebuild
+  the kernel, for toggling a "const" qualifier.
+  This can be used, for example, by a linux distro, to create a more
+  versatile binary kernel and allow its users to toggle between developer
+  (unprotected) or production (protected) modes by reconfiguring the
+  bootloader.
+ 
+
+When *not* to use pmalloc
+-------------------------
+
+Using pmalloc is not a good idea in some cases:
+
+- when optimizing TLB utilization is paramount:
+  pmalloc relies on virtual memory areas and will therefore use more
+  tlb entries. It still does a better job of it, compared to invoking
+  vmalloc for each allocation, but it is undeniably less optimized wrt to
+  TLB use than the physmap.
+
+- when rare-write is not-so-rare:
+  rare-write does not allow updates in-place, it rather expects to be
+  provided a version of how the data is supposed to be, and then it
+  performs the update accordingly, by modifying the original data.
+  Such procedure takes an amount of time that is proportional to the
+  number of pages affected.
+
+
+Utilization
+-----------
 
 The typical sequence, when using pmalloc, is:
 
-#. create a pool
+#. create a pool, choosing if it can be altered or not, after protection
 
    :c:func:`pmalloc_create_pool`
 
@@ -94,7 +143,11 @@ The typical sequence, when using pmalloc, is:
 
    :c::func:`pmalloc_protect_pool`
 
-#. iterate over the last 3 points as needed
+#. [optional] modify the pool, if it was created as rewritable
+
+   :c::func:`pmalloc_rare_write`
+
+#. iterate over the last 4 points as needed
 
 #. [optional] destroy the pool
 
