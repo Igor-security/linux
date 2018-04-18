@@ -10,8 +10,9 @@ Purpose
 
 The pmalloc library is meant to provide read-only status to data that,
 for some reason, could neither be declared as constant, nor could it take
-advantage of the qualifier __ro_after_init, but it is in spirit
-write-once/read-only.
+advantage of the qualifier __ro_after_init.
+But it is in spirit either fully write-once/read-only or at least
+write-seldom/mostly-read-only.
 At some point it might get teared down, however that doesn't affect how it
 is treated, while it's still relevant.
 Pmalloc protects data from both accidental and malicious overwrites.
@@ -76,6 +77,49 @@ more TLB entries. It still does a better job of it, compared to invoking
 vmalloc for each allocation, but it is undeniably less optimized wrt to
 TLB use than using the physmap directly, through kmalloc or similar.
 
+Use cases
+---------
+
+- Pmalloc memory is intended to complement __read_only_after_init.
+  It can be used, for example, where there is a write-once variable, for
+  which it is not possible to know the initialization value before init
+  is completed (which is what __read_only_after_init requires).
+ 
+- Pmalloc can be useful also when the amount of data to protect is not
+  known at compile time and the memory can only be allocated dynamically.
+ 
+- When it's not possible to fix a point in time after which the data
+  becomes immutable, but it's still fairly unlikely that it will change,
+  rare write becomes a less vulnerable alternative to leaving the data
+  located in freely rewritable memory.
+ 
+- Finally, it can be useful also when it is desirable to control
+  dynamically (for example throguh the kernel command line) if some
+  specific data ought to be protected or not, without having to rebuild
+  the kernel, for toggling a "const" qualifier.
+  This can be used, for example, by a linux distro, to create a more
+  versatile binary kernel and allow its users to toggle between developer
+  (unprotected) or production (protected) modes by reconfiguring the
+  bootloader.
+ 
+
+When *not* to use pmalloc
+-------------------------
+
+Using pmalloc is not a good idea in some cases:
+
+- when optimizing TLB utilization is paramount:
+  pmalloc relies on virtual memory areas and will therefore use more
+  tlb entries. It still does a better job of it, compared to invoking
+  vmalloc for each allocation, but it is undeniably less optimized wrt to
+  TLB use than using the physmap directly, through kmalloc or similar.
+
+- when rare-write is not-so-rare:
+  rare-write does not allow updates in-place, it rather expects to be
+  provided a version of how the data is supposed to be, and then it
+  performs the update accordingly, by modifying the original data.
+  Such procedure takes an amount of time that is proportional to the
+  number of pages affected.
 
 Caveats
 -------
@@ -112,6 +156,15 @@ Caveats
   But the allocation can take place during init, and its address is kown
   and constant.
 
+- The users of rare write must take care of ensuring the atomicity of the
+  action, respect to the way they use the data being altered; for example,
+  take a lock before making a copy of the value to modify (if it's
+  relevant), then alter it, issue the call to rare write and finally
+  release the lock. Some special scenario might be exempt from the need
+  for locking, but in general rare-write must be treated as an operation
+  that can incur into races.
+
+
 
 Utilization
 -----------
@@ -122,7 +175,7 @@ Steps to perforn during init:
 
 #. create an "anchor", with the modifier __ro_after_init
 
-#. create a pool
+#. create a pool, choosing if it can be altered or not, after protection
 
    :c:func:`pmalloc_create_pool`
 
@@ -147,7 +200,11 @@ init, as long as they strictly come after the previous sequence.
 
    :c::func:`pmalloc_protect_pool`
 
-#. iterate over the last 2 points as needed
+#. [optional] modify the pool, if it was created as rewritable
+
+   :c::func:`pmalloc_rare_write`
+
+#. iterate over the last 3 points as needed
 
 #. [optional] destroy the pool
 
