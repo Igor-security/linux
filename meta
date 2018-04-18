@@ -1,7 +1,7 @@
 Version: 1
-Previous: 9f967f9d021347f8d19c375292f4a9109574a793
-Head: ff7b430416d61900971c895f129d9cefb75a7b4f
+Previous: 3a8559baeb62ad569c526a79ff07d07d70cc1317
+Head: 509bd7b4c4620870f572c6bf4e82b789f4a5b747
 Applied:
+  proto_rare_write: 509bd7b4c4620870f572c6bf4e82b789f4a5b747
 Unapplied:
-  proto_rare_write: c8759be102119c9ab434299b46a0df4161ccc8c3
 Hidden:
