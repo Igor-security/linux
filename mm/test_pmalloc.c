@@ -6,9 +6,10 @@
  * Author: Igor Stoppa <igor.stoppa@huawei.com>
  */
 
+#include <linux/init.h>
+#include <linux/module.h>
 #include <linux/pmalloc.h>
 #include <linux/mm.h>
-#include <linux/test_pmalloc.h>
 #include <linux/bug.h>
 
 #include "pmalloc_helpers.h"
@@ -43,7 +44,7 @@ static bool create_and_destroy_pool(void)
 
 	pr_notice("Testing pool creation and destruction capability");
 
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Cannot allocate memory for pmalloc selftest."))
 		return false;
 	pmalloc_destroy_pool(pool);
@@ -58,7 +59,7 @@ static bool test_alloc(void)
 	static void *p;
 
 	pr_notice("Testing allocation capability");
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
 		return false;
 	p = pmalloc(pool,  SIZE_1 - 1);
@@ -84,7 +85,7 @@ static bool test_is_pmalloc_object(void)
 	if (WARN(!vmalloc_p,
 		 "Unable to allocate memory for pmalloc selftest."))
 		return false;
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
 		return false;
 	pmalloc_p = pmalloc(pool,  SIZE_1 - 1);
@@ -104,35 +105,29 @@ error:
 	return retval;
 }
 
-/* Test out of virtually contiguous memory */
-static void test_oovm(void)
-{
-	struct pmalloc_pool *pool;
-	unsigned int i;
-
-	pr_notice("Exhaust vmalloc memory with doubling allocations.");
-	pool = pmalloc_create_pool();
-	if (WARN(!pool, "Failed to create pool"))
-		return;
-	for (i = 1; i; i *= 2)
-		if (unlikely(!pzalloc(pool, i - 1)))
-			break;
-	pr_notice("vmalloc oom at %d allocation", i - 1);
-	pmalloc_protect_pool(pool);
-	pmalloc_destroy_pool(pool);
-}
-
 /**
  * test_pmalloc()  -main entry point for running the test cases
  */
-void test_pmalloc(void)
-{
 
+static int __init test_pmalloc_init_module(void)
+{
 	pr_notice("pmalloc-selftest");
 
 	if (unlikely(!(create_and_destroy_pool() &&
 		       test_alloc() &&
 		       test_is_pmalloc_object())))
-		return;
-	test_oovm();
+		return -1;
+	return 0;
 }
+
+module_init(test_pmalloc_init_module);
+
+static void __exit test_pmalloc_cleanup_module(void)
+{
+}
+
+module_exit(test_pmalloc_cleanup_module);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Igor Stoppa <igor.stoppa@huawei.com>");
+MODULE_DESCRIPTION("Test module for pmalloc.");
