@@ -44,7 +44,7 @@ static bool create_and_destroy_pool(void)
 
 	pr_notice("Testing pool creation and destruction capability");
 
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Cannot allocate memory for pmalloc selftest."))
 		return false;
 	pmalloc_destroy_pool(pool);
@@ -59,7 +59,7 @@ static bool test_alloc(void)
 	static void *p;
 
 	pr_notice("Testing allocation capability");
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
 		return false;
 	p = pmalloc(pool,  SIZE_1 - 1);
@@ -85,7 +85,7 @@ static bool test_is_pmalloc_object(void)
 	if (WARN(!vmalloc_p,
 		 "Unable to allocate memory for pmalloc selftest."))
 		return false;
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
 		return false;
 	pmalloc_p = pmalloc(pool,  SIZE_1 - 1);
