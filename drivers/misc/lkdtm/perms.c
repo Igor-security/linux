@@ -111,7 +111,7 @@ void lkdtm_WRITE_RO_PMALLOC(void)
 	struct pmalloc_pool *pool;
 	int *i;
 
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
 		return;
 
