@@ -16,7 +16,7 @@
 /*
  * Library for dynamic allocation of pools of protectable memory.
  * A pool is a single linked list of vmap_area structures.
- * Whenever a pool is protected, all the areas it contain at that point
+ * Whenever a pool is protected, all the areas it contains at that point
  * are write protected.
  * More areas can be added and protected, in the same way.
  * Memory in a pool cannot be individually unprotected, but the pool can
@@ -24,29 +24,49 @@
  * Upon destruction of a certain pool, all the related memory is released,
  * including its metadata.
  *
+ * Depending on the type of protection that was choosen, the memory can be
+ * either completely read-only or it can support rare-writes.
+ *
+ * The rare-write mechanism is intended to provide no read overhead and
+ * still some form of protection, while a selected area is modified.
+ * This will incur into a penalty that is partially depending on the
+ * specific architecture, but in general is the price to pay for limiting
+ * the attack surface, while the change takes place.
+ *
+ * For additional safety, it is not possible to have in the same pool both
+ * rare-write and unmodifiable memory.
+ *
  * Pmalloc memory is intended to complement __read_only_after_init.
  * It can be used, for example, where there is a write-once variable, for
  * which it is not possible to know the initialization value before init
  * is completed (which is what __read_only_after_init requires).
  *
- * It can be useful also where the amount of data to protect is not known
- * at compile time and the memory can only be allocated dynamically.
+ * Rare write can also provide a compromise between freely rewritable
+ * memory and const.
+ *
+ * Another case where it can be useful is when the amount of data to
+ * protect is not known at compile time and the memory can only be
+ * allocated dynamically.
  *
  * Finally, it can be useful also when it is desirable to control
  * dynamically (for example throguh the command line) if something ought
  * to be protected or not, without having to rebuild the kernel (like in
- * the build used for a linux distro).
+ * the kernel binary files provided by a linux distro).
  */
 
 
 #define PMALLOC_REFILL_DEFAULT (0)
 #define PMALLOC_ALIGN_DEFAULT ARCH_KMALLOC_MINALIGN
+#define PMALLOC_RO 0
+#define PMALLOC_RW 1
 
 struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
+						bool rewritable,
 						unsigned short align_order);
 
 /**
  * pmalloc_create_pool() - create a protectable memory pool
+ * @rewritable: can the data be altered after protection
  *
  * Shorthand for pmalloc_create_custom_pool() with default argument:
  * * refill is set to PMALLOC_REFILL_DEFAULT
@@ -56,9 +76,10 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
  * * pointer to the new pool	- success
  * * NULL			- error
  */
-static inline struct pmalloc_pool *pmalloc_create_pool(void)
+static inline struct pmalloc_pool *pmalloc_create_pool(bool rewritable)
 {
 	return pmalloc_create_custom_pool(PMALLOC_REFILL_DEFAULT,
+					  rewritable,
 					  PMALLOC_ALIGN_DEFAULT);
 }
 
@@ -158,6 +179,7 @@ static inline char *pstrdup(struct pmalloc_pool *pool, const char *s)
 
 void pmalloc_protect_pool(struct pmalloc_pool *pool);
 
+void pmalloc_make_pool_ro(struct pmalloc_pool *pool);
 
 void pmalloc_destroy_pool(struct pmalloc_pool *pool);
 #endif
