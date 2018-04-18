@@ -30,33 +30,37 @@ struct pmalloc_pool {
 	size_t refill;
 	size_t offset;
 	size_t align;
+	bool rewritable;
 };
 
 static LIST_HEAD(pools_list);
 static DEFINE_MUTEX(pools_mutex);
 
-static inline void tag_area(struct vmap_area *area)
+static __always_inline void tag_area(struct vmap_area *area, bool rewritable)
 {
-	area->vm->flags |= VM_PMALLOC;
+	area->vm->flags |= VM_PMALLOC |
+			   (rewritable ? VM_PMALLOC_REWRITABLE : 0);
 }
 
-static inline void untag_area(struct vmap_area *area)
+static __always_inline void untag_area(struct vmap_area *area)
 {
-	area->vm->flags &= ~VM_PMALLOC;
+	area->vm->flags &= ~(VM_PMALLOC |
+			     VM_PMALLOC_REWRITABLE |
+			     VM_PMALLOC_PROTECTED);
 }
 
-static inline struct vmap_area *current_area(struct pmalloc_pool *pool)
+static __always_inline struct vmap_area *current_area(struct pmalloc_pool *pool)
 {
 	return llist_entry(pool->vm_areas.first, struct vmap_area,
 			   area_list);
 }
 
-static inline bool is_area_protected(struct vmap_area *area)
+static __always_inline bool is_area_protected(struct vmap_area *area)
 {
 	return area->vm->flags & VM_PMALLOC_PROTECTED;
 }
 
-static inline void protect_area(struct vmap_area *area)
+static __always_inline void protect_area(struct vmap_area *area)
 {
 	if (unlikely(is_area_protected(area)))
 		return;
@@ -64,20 +68,32 @@ static inline void protect_area(struct vmap_area *area)
 	area->vm->flags |= VM_PMALLOC_PROTECTED;
 }
 
-static inline void destroy_area(struct vmap_area *area)
+static __always_inline void make_area_ro(struct vmap_area *area)
+{
+	area->vm->flags &= ~VM_PMALLOC_REWRITABLE;
+	protect_area(area);
+}
+
+static __always_inline void unprotect_area(struct vmap_area *area)
+{
+	if (likely(is_area_protected(area)))
+		set_memory_rw(area->va_start, area->vm->nr_pages);
+	untag_area(area);
+}
+
+static __always_inline void destroy_area(struct vmap_area *area)
 {
 	WARN(!is_area_protected(area), "Destroying unprotected area.");
-	area->vm->flags &= ~(VM_PMALLOC | VM_PMALLOC_PROTECTED);
-	set_memory_rw(area->va_start, area->vm->nr_pages);
+	unprotect_area(area);
 	vfree((void *)area->va_start);
 }
 
-static inline bool empty(struct pmalloc_pool *pool)
+static __always_inline bool empty(struct pmalloc_pool *pool)
 {
 	return unlikely(llist_empty(&pool->vm_areas));
 }
 
-static inline bool protected(struct pmalloc_pool *pool)
+static __always_inline bool protected(struct pmalloc_pool *pool)
 {
 	return is_area_protected(current_area(pool));
 }
@@ -92,7 +108,7 @@ static inline bool exhausted(struct pmalloc_pool *pool, size_t size)
 	return unlikely(space_after < size && space_before < size);
 }
 
-static inline bool space_needed(struct pmalloc_pool *pool, size_t size)
+static __always_inline bool space_needed(struct pmalloc_pool *pool, size_t size)
 {
 	return empty(pool) || protected(pool) || exhausted(pool, size);
 }
@@ -103,6 +119,7 @@ static inline bool space_needed(struct pmalloc_pool *pool, size_t size)
  * @refill: the minimum size to allocate when in need of more memory.
  *          It will be rounded up to a multiple of PAGE_SIZE
  *          The value of 0 gives the default amount of PAGE_SIZE.
+ * @rewritable: can the data be altered after protection
  * @align_order: log2 of the alignment to use when allocating memory
  *               Negative values give ARCH_KMALLOC_MINALIGN
  *
@@ -114,6 +131,7 @@ static inline bool space_needed(struct pmalloc_pool *pool, size_t size)
  * * NULL			- error
  */
 struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
+						bool rewritable,
 						unsigned short align_order)
 {
 	struct pmalloc_pool *pool;
@@ -123,6 +141,7 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
 		return NULL;
 
 	pool->refill = refill ? PAGE_ALIGN(refill) : DEFAULT_REFILL_SIZE;
+	pool->rewritable = rewritable;
 	pool->align = 1UL << align_order;
 	mutex_init(&pool->mutex);
 
@@ -146,7 +165,7 @@ static int grow(struct pmalloc_pool *pool, size_t min_size)
 		return -ENOMEM;
 
 	area = find_vmap_area((unsigned long)addr);
-	tag_area(area);
+	tag_area(area, pool->rewritable);
 	pool->offset = area->vm->nr_pages * PAGE_SIZE;
 	llist_add(&area->area_list, &pool->vm_areas);
 	return 0;
@@ -192,7 +211,7 @@ EXPORT_SYMBOL(pmalloc);
 
 /**
  * pmalloc_protect_pool() - write-protects the memory in the pool
- * @pool: the pool associated tothe memory to write-protect
+ * @pool: the pool associated to the memory to write-protect
  *
  * Write-protects all the memory areas currently assigned to the pool
  * that are still unprotected.
@@ -213,6 +232,24 @@ void pmalloc_protect_pool(struct pmalloc_pool *pool)
 }
 EXPORT_SYMBOL(pmalloc_protect_pool);
 
+/**
+ * pmalloc_make_pool_ro() - drops rare-write permission from a pool
+ * @pool: the pool associated to the memory to make ro
+ *
+ * Drops the possibility to perform controlled writes from both the pool
+ * metadata and all the vm_area structures associated to the pool.
+ */
+void pmalloc_make_pool_ro(struct pmalloc_pool *pool)
+{
+	struct vmap_area *area;
+
+	mutex_lock(&pool->mutex);
+	pool->rewritable = false;
+	llist_for_each_entry(area, pool->vm_areas.first, area_list)
+		protect_area(area);
+	mutex_unlock(&pool->mutex);
+}
+EXPORT_SYMBOL(pmalloc_make_pool_ro);
 
 /**
  * pmalloc_destroy_pool() - destroys a pool and all the associated memory
@@ -249,16 +286,14 @@ int pippo(void)
 {
 	struct pmalloc_pool *pool;
 	char *var1, *var2;
-	char *alias;
 	struct page *page_from_array;
 	struct page *page_from_pointer;
-	int i;
 	struct vm_struct *vm_struct;
 	struct vmap_area *vmap_area;
 	void *phys;
 	void *remapped_addr;
 
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RW);
 	var1 = pmalloc(pool, PAGE_SIZE);
 	pr_info("pippo var1              = 0x%p", var1);
 
