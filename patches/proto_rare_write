@@ -1,4 +1,4 @@
-Bottom: 4178026ae9e2a5aca3904955feaa69673165db5f
+Bottom: c954aa722dc1243d231bdb0552d415c7d3e49b1a
 Top:    b814811b3f3d5fe9ebdcc8056c864025d42db7d6
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-04-18 13:43:09 +0400
@@ -9,19 +9,10 @@ proto_rare_write
 ---
 
 diff --git a/include/linux/pmalloc.h b/include/linux/pmalloc.h
-index 833f916b1ee8..7f463869e572 100644
+index ee0406427972..7f463869e572 100644
 --- a/include/linux/pmalloc.h
 +++ b/include/linux/pmalloc.h
-@@ -16,7 +16,7 @@
- /*
-  * Library for dynamic allocation of pools of protectable memory.
-  * A pool is a single linked list of vmap_area structures.
-- * Whenever a pool is protected, all the areas it contain at that point
-+ * Whenever a pool is protected, all the areas it contains at that point
-  * are write protected.
-  * More areas can be added and protected, in the same way.
-  * Memory in a pool cannot be individually unprotected, but the pool can
-@@ -24,29 +24,49 @@
+@@ -24,13 +24,29 @@
   * Upon destruction of a certain pool, all the related memory is released,
   * including its metadata.
   *
@@ -53,11 +44,7 @@ index 833f916b1ee8..7f463869e572 100644
   *
   * Finally, it can be useful also when it is desirable to control
   * dynamically (for example throguh the command line) if something ought
-  * to be protected or not, without having to rebuild the kernel (like in
-- * the build used for a linux distro).
-+ * the kernel binary files provided by a linux distro).
-  */
- 
+@@ -41,12 +57,16 @@
  
  #define PMALLOC_REFILL_DEFAULT (0)
  #define PMALLOC_ALIGN_DEFAULT ARCH_KMALLOC_MINALIGN
