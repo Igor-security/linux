@@ -241,3 +241,58 @@ void pmalloc_destroy_pool(struct pmalloc_pool *pool)
 	}
 }
 EXPORT_SYMBOL(pmalloc_destroy_pool);
+
+
+int pippo(void);
+
+int pippo(void)
+{
+	struct pmalloc_pool *pool;
+	char *var1, *var2;
+	char *alias;
+	struct page *page_from_array;
+	struct page *page_from_pointer;
+	int i;
+	struct vm_struct *vm_struct;
+	struct vmap_area *vmap_area;
+	void *phys;
+	void *remapped_addr;
+
+	pool = pmalloc_create_pool();
+	var1 = pmalloc(pool, PAGE_SIZE);
+	pr_info("pippo var1              = 0x%p", var1);
+
+	vmap_area = find_vmap_area((unsigned long)var1);
+	pr_info("pippo vmap_area         = 0x%p", vmap_area);
+
+	vm_struct = vmap_area->vm;
+	pr_info("pippo vm_struct         = 0x%p", vm_struct);
+
+	page_from_array = vm_struct->pages[0];
+	pr_info("pippo page_from_array   = 0x%p", page_from_array);
+
+	page_from_pointer = vmalloc_to_page(var1);
+	pr_info("pippo page_from_pointer = 0x%p", page_from_pointer);
+
+	phys = (void *)page_to_phys(page_from_pointer);
+	pr_info("pippo phys              = 0x%p", phys);
+
+	*var1 = 25;
+	pmalloc_protect_pool(pool);
+
+	remapped_addr = vmap(&page_from_array, 1, VM_MAP, PAGE_KERNEL);
+	pr_info("pippo remapped_addr = 0x%p", remapped_addr);
+
+	var2 = (char*)remapped_addr;
+	pr_info("pippo var2 = %d", (int)*var2);
+
+	*var2 = 19;
+	pr_info("pippo var2 = %d", (int)*var2);
+	pr_info("pippo var1 = %d", (int)*var1);
+	vunmap(remapped_addr);
+//	*var2 = 1;
+	pr_info("pippo var1 = %d", (int)*var1);
+//	*var1 = 1;
+	return 0;
+}
+core_initcall(pippo);
