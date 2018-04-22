@@ -264,6 +264,11 @@ static inline int is_pmalloc_object(const void *ptr, const unsigned long n)
 	return (start <= end) && (end <= area_end);
 }
 
+int __is_pmalloc_object(const void *ptr, const unsigned long n)
+{
+	return is_pmalloc_object(ptr, n);
+}
+
 static inline void check_pmalloc_object(const void *ptr, unsigned long n,
 					bool to_user)
 {
@@ -284,8 +289,8 @@ static inline void check_pmalloc_object(const void *ptr, unsigned long n,
 
 #else
 
-static inline void check_pmalloc_object(const void *ptr, unsigned long n,
-					bool to_user)
+static inline void __check_pmalloc_object(const void *ptr, unsigned long n,
+					  bool to_user)
 {
 }
 #endif
