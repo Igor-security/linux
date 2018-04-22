@@ -14,6 +14,7 @@
 #define SIZE_1 (PAGE_SIZE * 3)
 #define SIZE_2 1000
 
+extern int __is_pmalloc_object(const void *ptr, const unsigned long n);
 
 /* wrapper for is_pmalloc_object() with messages */
 static inline bool validate_alloc(bool expected, void *addr,
@@ -21,7 +22,7 @@ static inline bool validate_alloc(bool expected, void *addr,
 {
 	bool test;
 
-	test = is_pmalloc_object(addr, size) > 0;
+	test = __is_pmalloc_object(addr, size) > 0;
 	pr_notice("must be %s: %s",
 		  expected ? "ok" : "no", test ? "ok" : "no");
 	return test == expected;
