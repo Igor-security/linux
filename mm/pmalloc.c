@@ -21,129 +21,14 @@
 #include <asm/page.h>
 
 #include <linux/pmalloc.h>
-
-#define MAX_ALIGN_ORDER (ilog2(sizeof(void *)))
-struct pmalloc_pool {
-	struct mutex mutex;
-	struct list_head pool_node;
-	struct llist_head vm_areas;
-	size_t refill;
-	size_t offset;
-	size_t align;
-	bool rewritable;
-};
+#include "pmalloc_helpers.h"
 
 static LIST_HEAD(pools_list);
 static DEFINE_MUTEX(pools_mutex);
 
-#define VM_PMALLOC_PROTECTED_MASK (VM_PMALLOC | VM_PMALLOC_PROTECTED)
-#define VM_PMALLOC_REWRITABLE_MASK \
-	(VM_PMALLOC | VM_PMALLOC_REWRITABLE)
-#define VM_PMALLOC_PROTECTED_REWRITABLE_MASK \
-	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
-#define VM_PMALLOC_MASK \
-	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
-
-/*
- * Helper functions for the field "flags" in "struct vm_struct".
- * The type used as function retval is the same type as the type of "flags".
- */
-static __always_inline unsigned long area_flags(struct vmap_area *area)
-{
-	return area->vm->flags & VM_PMALLOC_MASK;
-}
-
-static __always_inline void tag_area(struct vmap_area *area, bool rewritable)
-{
-	if (rewritable)
-		area->vm->flags |= VM_PMALLOC_REWRITABLE_MASK;
-	else
-		area->vm->flags |= VM_PMALLOC;
-}
-
-static __always_inline void untag_area(struct vmap_area *area)
-{
-	area->vm->flags &= ~VM_PMALLOC_MASK;
-}
-
-static __always_inline struct vmap_area *current_area(struct pmalloc_pool *pool)
-{
-	return llist_entry(pool->vm_areas.first, struct vmap_area,
-			   area_list);
-}
-
-static __always_inline bool area_matches_mask(struct vmap_area *area,
-					      unsigned long mask)
-{
-	return (area->vm->flags & mask) == mask;
-}
-
-static __always_inline bool is_area_protected(struct vmap_area *area)
-{
-	return area_matches_mask(area, VM_PMALLOC_PROTECTED_MASK);
-}
-
-static __always_inline bool is_area_rewritable(struct vmap_area *area)
-{
-	return area_matches_mask(area, VM_PMALLOC_REWRITABLE_MASK);
-}
-
-static __always_inline void protect_area(struct vmap_area *area)
-{
-	if (unlikely(is_area_protected(area)))
-		return;
-	set_memory_ro(area->va_start, area->vm->nr_pages);
-	area->vm->flags |= VM_PMALLOC_PROTECTED_MASK;
-}
-
-
-static __always_inline void make_area_ro(struct vmap_area *area)
-{
-	area->vm->flags &= ~VM_PMALLOC_REWRITABLE;
-	protect_area(area);
-}
-
-
-static __always_inline void unprotect_area(struct vmap_area *area)
-{
-	if (likely(is_area_protected(area)))
-		set_memory_rw(area->va_start, area->vm->nr_pages);
-	untag_area(area);
-}
-
-static __always_inline void destroy_area(struct vmap_area *area)
-{
-	WARN(!is_area_protected(area), "Destroying unprotected area.");
-	unprotect_area(area);
-	vfree((void *)area->va_start);
-}
-
-static __always_inline bool empty(struct pmalloc_pool *pool)
-{
-	return unlikely(llist_empty(&pool->vm_areas));
-}
-
-static __always_inline bool protected(struct pmalloc_pool *pool)
-{
-	return is_area_protected(current_area(pool));
-}
-
-static inline bool exhausted(struct pmalloc_pool *pool, size_t size)
-{
-	size_t space_before;
-	size_t space_after;
-
-	space_before = round_down(pool->offset, pool->align);
-	space_after = pool->offset - space_before;
-	return unlikely(space_after < size && space_before < size);
-}
-
-static __always_inline bool space_needed(struct pmalloc_pool *pool, size_t size)
-{
-	return empty(pool) || protected(pool) || exhausted(pool, size);
-}
-
+#define MAX_ALIGN_ORDER (ilog2(sizeof(void *)))
 #define DEFAULT_REFILL_SIZE PAGE_SIZE
+
 /**
  * pmalloc_create_custom_pool() - create a new protectable memory pool
  * @refill: the minimum size to allocate when in need of more memory.
@@ -196,7 +81,7 @@ static int grow(struct pmalloc_pool *pool, size_t min_size)
 
 	area = find_vmap_area((unsigned long)addr);
 	tag_area(area, pool->rewritable);
-	pool->offset = area->vm->nr_pages * PAGE_SIZE;
+	pool->offset = get_area_pages_size(area);
 	llist_add(&area->area_list, &pool->vm_areas);
 	return 0;
 }
@@ -309,8 +194,15 @@ void pmalloc_destroy_pool(struct pmalloc_pool *pool)
 }
 EXPORT_SYMBOL(pmalloc_destroy_pool);
 
+static inline bool rare_write(struct vmap_area *area,
+			      const void* destination,
+			      const void * source, size_t n_bytes)
+{
+	return true;
+}
+
 bool pmalloc_rare_write(struct pmalloc_pool *pool, const void *destination,
-			const void *source, size_t size)
+			const void *source, size_t n_bytes)
 {
 	bool retval = false;
 	struct vmap_area *area;
@@ -323,16 +215,16 @@ bool pmalloc_rare_write(struct pmalloc_pool *pool, const void *destination,
 	mutex_lock(&pool->mutex);
 	if (unlikely(!pool->rewritable))
 		goto out;
-	llist_for_each_entry(area, pool->vm_areas.first, area_list)
-		protect_area(area);
-	goto out;
-dest_ok:
+
+	area = pool_get_area(pool, destination, n_bytes);
+	if (unlikely(!area))
+		goto out;
+	retval = rare_write(area, destination, source, n_bytes);
 out:
 	mutex_unlock(&pool->mutex);
 	return retval;
-
-
 }
+EXPORT_SYMBOL(pmalloc_rare_write);
 
 void test_rare_write(void)
 {
