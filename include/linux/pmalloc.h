@@ -159,6 +159,8 @@ static inline char *pstrdup(struct pmalloc_pool *pool, const char *s)
 	return buf;
 }
 
+bool pmalloc_rare_write(struct pmalloc_pool *pool, const void *destination,
+			const void *source, size_t n_bytes);
 
 void pmalloc_protect_pool(struct pmalloc_pool *pool);
 

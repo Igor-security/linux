@@ -34,7 +34,7 @@ static __always_inline unsigned long area_flags(struct vmap_area *area)
 
 static __always_inline void tag_area(struct vmap_area *area, bool rewritable)
 {
-	if (rewritable)
+	if (rewritable == PMALLOC_RW)
 		area->vm->flags |= VM_PMALLOC_REWRITABLE_MASK;
 	else
 		area->vm->flags |= VM_PMALLOC;
@@ -132,9 +132,9 @@ static __always_inline size_t get_area_pages_end(struct vmap_area *area)
 	return area->va_start + get_area_pages_size(area);
 }
 
-static __always_inline area_contains_range(struct vmap_area *area,
-					   const void *addr,
-					   size_t n_bytes)
+static __always_inline bool area_contains_range(struct vmap_area *area,
+						const void *addr,
+						size_t n_bytes)
 {
 	size_t area_end = get_area_pages_end(area);
 	size_t range_start = (size_t)addr;

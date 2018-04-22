@@ -147,6 +147,69 @@ void pmalloc_protect_pool(struct pmalloc_pool *pool)
 }
 EXPORT_SYMBOL(pmalloc_protect_pool);
 
+static inline bool rare_write(const void *destination,
+			      const void *source, size_t n_bytes)
+{
+	struct page *page;
+	void *base;
+	size_t size;
+	size_t offset;
+
+	while (n_bytes) {
+		page = vmalloc_to_page(destination);
+		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
+		if (WARN(!base, "failed to remap rewritable page"))
+			return false;
+		offset = (size_t)(PAGE_MASK & (unsigned long)destination);
+		size = min(n_bytes, (size_t)PAGE_SIZE - offset);
+		memcpy(base, source, size);
+		vunmap(base);
+		destination += size;
+		source += size;
+		n_bytes -= size;
+	}
+}
+
+/**
+ * pmalloc_rare_write() - alters the content of a rewritable pool
+ * @pool: the pool associated to the memory to write-protect
+ * @destination: where to write the new data
+ * @source: the location of the data to replicate into the pool
+ * @n_bytes: the size of the region to modify
+ *
+ * Return:
+ * * true	- success
+ * * false	- error
+ */
+bool pmalloc_rare_write(struct pmalloc_pool *pool, const void *destination,
+			const void *source, size_t n_bytes)
+{
+	bool retval = false;
+	struct vmap_area *area;
+
+	/*
+	 * The following sanitation is meant to make life harder for
+	 * attempts at using ROP/JOP to call this function against pools
+	 * that are not supposed to be modifiable.
+	 */
+	mutex_lock(&pool->mutex);
+	if (WARN(pool->rewritable != PMALLOC_RW,
+		 "pippo Attempting to modify non rewritable pool"))
+		goto out;
+	area = pool_get_area(pool, destination, n_bytes);
+	if (WARN(!area, "pippo Destination range not in pool"))
+		goto out;
+	if (WARN(!is_area_rewritable(area),
+		 "pippo Attempting to modify non rewritable area"))
+		goto out;
+	rare_write(destination, source, n_bytes);
+	retval = true;
+out:
+	mutex_unlock(&pool->mutex);
+	return retval;
+}
+EXPORT_SYMBOL(pmalloc_rare_write);
+
 /**
  * pmalloc_make_pool_ro() - drops rare-write permission from a pool
  * @pool: the pool associated to the memory to make ro
@@ -194,103 +257,3 @@ void pmalloc_destroy_pool(struct pmalloc_pool *pool)
 }
 EXPORT_SYMBOL(pmalloc_destroy_pool);
 
-static inline void rare_write(const void* destination,
-			      const void * source, size_t n_bytes)
-{
-	struct page *original;
-	void *base;
-
-	while (n_bytes) {
-		page = vmalloc_to_page(destination);
-		base = vmap(&page, 1, VM_MAP_ PAGE_KERNEL);
-		size = min(n_bytes, PAGE_SIZE - destination & PAGE_MASK);
-		memcpy()
-		vunmap(base);
-		destination += size;
-		source += size;
-		n_bytes -= size;
-	}
-}
-
-bool pmalloc_rare_write(struct pmalloc_pool *pool, const void *destination,
-			const void *source, size_t n_bytes)
-{
-	bool retval = false;
-	struct vmap_area *area;
-
-	/*
-	 * The following sanitation is meant to make life harder for
-	 * attempts at using ROP/JOP to call this function against pools
-	 * that are not supposed to be modifiable.
-	 */
-	mutex_lock(&pool->mutex);
-	if (unlikely(!pool->rewritable))
-		goto out;
-	area = pool_get_area(pool, destination, n_bytes);
-	if (unlikely(!area))
-		goto out;
-	if (unlikely(!is_area_rewritable(area)))
-		goto out;
-	rare_write(destination, source, n_bytes);
-	retval = true;
-out:
-	mutex_unlock(&pool->mutex);
-	return retval;
-}
-EXPORT_SYMBOL(pmalloc_rare_write);
-
-void test_rare_write(void)
-{
-}
-
-int pippo(void);
-
-int pippo(void)
-{
-	struct pmalloc_pool *pool;
-	char *var1, *var2;
-	struct page *page_from_array;
-	struct page *page_from_pointer;
-	struct vm_struct *vm_struct;
-	struct vmap_area *vmap_area;
-	void *phys;
-	void *remapped_addr;
-
-	pool = pmalloc_create_pool(PMALLOC_RW);
-	var1 = pmalloc(pool, PAGE_SIZE);
-	pr_info("pippo var1              = 0x%p", var1);
-
-	vmap_area = find_vmap_area((unsigned long)var1);
-	pr_info("pippo vmap_area         = 0x%p", vmap_area);
-
-	vm_struct = vmap_area->vm;
-	pr_info("pippo vm_struct         = 0x%p", vm_struct);
-
-	page_from_array = vm_struct->pages[0];
-	pr_info("pippo page_from_array   = 0x%p", page_from_array);
-
-	page_from_pointer = vmalloc_to_page(var1);
-	pr_info("pippo page_from_pointer = 0x%p", page_from_pointer);
-
-	phys = (void *)page_to_phys(page_from_pointer);
-	pr_info("pippo phys              = 0x%p", phys);
-
-	*var1 = 25;
-	pmalloc_protect_pool(pool);
-
-	remapped_addr = vmap(&page_from_array, 1, VM_MAP, PAGE_KERNEL);
-	pr_info("pippo remapped_addr = 0x%p", remapped_addr);
-
-	var2 = (char*)remapped_addr;
-	pr_info("pippo var2 = %d", (int)*var2);
-
-	*var2 = 19;
-	pr_info("pippo var2 = %d", (int)*var2);
-	pr_info("pippo var1 = %d", (int)*var1);
-	vunmap(remapped_addr);
-//	*var2 = 1;
-	pr_info("pippo var1 = %d", (int)*var1);
-//	*var1 = 1;
-	return 0;
-}
-core_initcall(pippo);

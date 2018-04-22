@@ -122,6 +122,25 @@ static void test_oovm(void)
 	pmalloc_destroy_pool(pool);
 }
 
+/* Verify rewritable feature. */
+static int test_rare_write(void)
+{
+	struct pmalloc_pool *pool;
+	char *v1;
+	char v2;
+
+
+	pr_notice("Test pmalloc_rare_write()");
+	pool = pmalloc_create_pool(PMALLOC_RW);
+	v1 = pzalloc(pool, PAGE_SIZE * 2);
+	*v1 = 33;
+	v2 = 17;
+	pr_info("pippo *v1 = %d", (int)*v1);
+	pmalloc_rare_write(pool, v1, &v2, 1);
+	pr_info("pippo *v1 = %d", (int)*v1);
+	return 0;
+}
+
 /**
  * test_pmalloc()  -main entry point for running the test cases
  */
@@ -135,4 +154,5 @@ void test_pmalloc(void)
 		       test_is_pmalloc_object())))
 		return;
 	test_oovm();
+	test_rare_write();
 }
