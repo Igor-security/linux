@@ -1,8 +1,7 @@
 Version: 1
-Previous: e75f690b0242ac403e0e80a1d1fb121fb520a9ea
+Previous: cb0b0c1fd5fbb4affc64d8e6fd0ac752cbc6efac
 Head: f6a30ad2100689e70d8b2f344633af1f67edce51
 Applied:
-  pmalloc-selftest: f6a30ad2100689e70d8b2f344633af1f67edce51
 Unapplied:
   lkdtm-crash-on-overwriting: eaaf280a6ca453b381f01765a0017084027b15e2
   proto_rare_write: 1c6a119fb32ba0bf2040ac2abb82acd13b127a5d
