@@ -1,8 +1,8 @@
 Version: 1
-Previous: d968637b5abd15bbc4eabb058aa96e5f061e6da2
-Head: c0532354b61008c20cdc010915a8291fde863373
+Previous: db0f5c42b311817f045900baeceaf00075865916
+Head: 76266a6b0044e3c7ac4e86cd1c1a1a6ec4d721f9
 Applied:
+  lkdtm-crash-on-overwriting: 76266a6b0044e3c7ac4e86cd1c1a1a6ec4d721f9
 Unapplied:
-  lkdtm-crash-on-overwriting: eaaf280a6ca453b381f01765a0017084027b15e2
   proto_rare_write: 1c6a119fb32ba0bf2040ac2abb82acd13b127a5d
 Hidden:
