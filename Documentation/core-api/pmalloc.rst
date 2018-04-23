@@ -10,14 +10,9 @@ Purpose
 
 The pmalloc library is meant to provide read-only status to data that,
 for some reason, could neither be declared as constant, nor could it take
-<<<<<<< current
-advantage of the qualifier __ro_after_init, but it is in spirit
-write-once/read-only.
-=======
 advantage of the qualifier __ro_after_init.
 But it is in spirit either fully write-once/read-only or at least
 write-seldom/mostly-read-only.
->>>>>>> patched
 At some point it might get teared down, however that doesn't affect how it
 is treated, while it's still relevant.
 Pmalloc protects data from both accidental and malicious overwrites.
@@ -43,15 +38,8 @@ minimum granularity that pmalloc allows to protect.
 There might be special cases where an area contains only one page, but
 they are still addressed as areas.
 
-<<<<<<< current
 Areas are allocated on-the-fly, when the space available is insufficient
 for satisfying the latest request received.
-=======
-When a pool is created, it is possible to specify three parameters:
-- refill size: the minimum size of the memory area to allocate when needed
-- rewritable: if the content can be modified
-- align_order: the default alignment to use when reserving memory
->>>>>>> patched
 
 To facilitate the conversion of existing code to pmalloc pools, several
 helper functions are provided, mirroring their k/vmalloc counterparts.
