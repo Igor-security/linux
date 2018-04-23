@@ -1,8 +1,7 @@
 Version: 1
-Previous: a14d98b50333c43aaa58e241a5897243ee111a30
+Previous: 4707da839fcada8b2617e7f40cefb7544adb3bd7
 Head: 0ffba81f202a2a16ba590d131fbc96a3a8702bbb
 Applied:
-  proto_rare_write: 0ffba81f202a2a16ba590d131fbc96a3a8702bbb
 Unapplied:
   boh_test_pmalloc: bbd60c3473916a85d00db0365d85ca1aa0e7c420
 Hidden:
