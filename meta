@@ -1,9 +1,8 @@
 Version: 1
-Previous: aaffa426183079a0f68c70be242d0668cbbdcd6e
-Head: f14594ac3024416c59e102b163feae5f4c5d3c3c
+Previous: 211f1523a366c0aef7df6a19c7f476e0625be5e7
+Head: 3dad9eb55931ad285cab7cb9b75f60e95e372acd
 Applied:
-  proto_rare_write: 73e50c668dc57a619b653e026f319bd014128ba2
-  refresh-temp: f14594ac3024416c59e102b163feae5f4c5d3c3c
+  proto_rare_write: 3dad9eb55931ad285cab7cb9b75f60e95e372acd
 Unapplied:
   boh_test_pmalloc: bbd60c3473916a85d00db0365d85ca1aa0e7c420
 Hidden:
