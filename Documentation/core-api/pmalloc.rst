@@ -10,9 +10,11 @@ Purpose
 
 The pmalloc library is meant to provide read-only status to data that,
 for some reason, could neither be declared as constant, nor could it take
-advantage of the qualifier __ro_after_init, but is write-once and
-read-only in spirit. At least as long as it doesn't get teared down.
-It protects data from both accidental and malicious overwrites.
+advantage of the qualifier __ro_after_init, but it is in spirit
+write-once/read-only.
+At some point it might get teared down, however that doesn't affect how it
+is treated, while it's still relevant.
+Pmalloc protects data from both accidental and malicious overwrites.
 
 Example: A policy that is loaded from userspace.
 
@@ -27,25 +29,52 @@ with other data, which must stay writeable.
 
 pmalloc introduces the concept of protectable memory pools.
 A pool contains a list of areas of virtually contiguous pages of
-memory. An area is the minimum amount of memory that pmalloc allows to
-protect, because the user might have allocated a memory range that
-crosses the boundary between pages.
+memory. When memory is requested from a pool, the requests are satisfied
+by reserving adequate amounts of memory from the active area of memory in
+that pool. A request can cross page boundaries, therefore an area is the
+minimum granularity that pmalloc allows to protect.
 
-When an allocation is performed, if there is not enough memory already
-available in the pool, a new area of suitable size is grabbed.
-The size chosen is the largest between the roundup (to PAGE_SIZE) of
-the request from pmalloc and friends and the refill parameter specified
-when creating the pool.
+There might be special cases where an area contains only one page, but
+they are still addressed as areas.
 
-When a pool is created, it is possible to specify two parameters:
-- refill size: the minimum size of the memory area to allocate when needed
-- align_order: the default alignment to use when reserving memory
+Areas are allocated on-the-fly, when the space available is insufficient
+for satisfying the latest request received.
 
 To facilitate the conversion of existing code to pmalloc pools, several
 helper functions are provided, mirroring their k/vmalloc counterparts.
-However one is missing. There is no pfree() because the memory protected
-by a pool will be released exclusively when the pool is destroyed.
 
+However, there is no pfree(), because the memory protected by a pool is
+released exclusively when the pool is destroyed.
+
+
+When to use pmalloc
+-------------------
+
+- Pmalloc memory is intended to complement __ro_after_init.
+  __ro_after_init requires that the initialization value is applied before
+  init is completed. If this is not possible, then pmalloc can be used.
+ 
+- Pmalloc can be useful also when the amount of data to protect is not
+  known at compile time and the memory can only be allocated dynamically.
+ 
+- Finally, it can be useful also when it is desirable to control
+  dynamically (for example throguh the kernel command line) if some
+  specific data ought to be protected or not, without having to rebuild
+  the kernel, for toggling a "const" qualifier.
+  This can be used, for example, by a linux distro, to create a more
+  versatile binary kernel and allow its users to toggle between developer
+  (unprotected) or production (protected) modes by reconfiguring the
+  bootloader.
+ 
+
+When *not* to use pmalloc
+-------------------------
+
+Using pmalloc is not a good idea when optimizing TLB utilization is
+paramount: pmalloc relies on virtual memory areas and will therefore use
+more TLB entries. It still does a better job of it, compared to invoking
+vmalloc for each allocation, but it is undeniably less optimized wrt to
+TLB use than using the physmap directly, through kmalloc or similar.
 
 
 Caveats
@@ -57,11 +86,11 @@ Caveats
 
 - As already explained, freeing of memory is not supported. Pages will be
   returned to the system upon destruction of the memory pool that they
-  belong to.
+  belong to. For this reason, no pfree() function is provided
 
 - The address range available for vmalloc (and thus for pmalloc too) is
   limited, on 32-bit systems. However it shouldn't be an issue, since not
-  much data is expected tobe dynamically allocated and turned into
+  much data is expected to be dynamically allocated and turned into
   read-only.
 
 - Regarding SMP systems, the allocations are expected to happen mostly
@@ -70,35 +99,60 @@ Caveats
   Loading of kernel modules is an exception to this, but it's not expected
   to happen with such high frequency to become a problem.
 
+- While pmalloc memory can be protected, since it is allocated dynamically,
+  it is still subject to indirect attacks, where the memory itself is not
+  touched, but anything used as reference to the allocation can be altered.
+  In some cases the allocation from a pmalloc pool is referred to by another
+  allocation, from either the same or another pool, however at some point,
+  there will be a base reference which can be attacked, if it cannot be
+  protected.
+  This base reference, or "anchor" is suitable for protection using
+  __ro_after_init, since it only needs to store the *address* of the
+  pmalloc allocation that will be initialized and protected later on.
+  But the allocation can take place during init, and its address is kown
+  and constant.
 
-Use
----
 
-The typical sequence, when using pmalloc, is:
+Utilization
+-----------
+
+Typical sequence, when using pmalloc
+
+Steps to perforn during init:
+
+#. create an "anchor", with the modifier __ro_after_init
 
 #. create a pool
 
    :c:func:`pmalloc_create_pool`
 
-#. issue one or more allocation requests to the pool
+#. issue an allocation requests to the pool with either
 
    :c:func:`pmalloc`
 
-   or
+   or one of its variants, like
 
    :c:func:`pzalloc`
 
-#. initialize the memory obtained, with the desired values
+   assigning its address to the anchor
+
+#. iterate the previous points as needed
+
+The Following steps can be performed at any time, both during and after
+init, as long as they strictly come after the previous sequence.
+
+#. initialize with the desired value the memory obtained from the pool(s)
 
 #. write-protect the memory so far allocated
 
    :c::func:`pmalloc_protect_pool`
 
-#. iterate over the last 3 points as needed
+#. iterate over the last 2 points as needed
 
 #. [optional] destroy the pool
 
    :c:func:`pmalloc_destroy_pool`
+
 
 API
 ---
