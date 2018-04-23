@@ -21,89 +21,14 @@
 #include <asm/page.h>
 
 #include <linux/pmalloc.h>
-
-#define MAX_ALIGN_ORDER (ilog2(sizeof(void *)))
-struct pmalloc_pool {
-	struct mutex mutex;
-	struct list_head pool_node;
-	struct llist_head vm_areas;
-	size_t refill;
-	size_t offset;
-	size_t align;
-};
+#include "pmalloc_helpers.h"
 
 static LIST_HEAD(pools_list);
 static DEFINE_MUTEX(pools_mutex);
 
-static __always_inline void tag_area(struct vmap_area *area)
-{
-	area->vm->flags |= VM_PMALLOC;
-}
-
-static __always_inline void untag_area(struct vmap_area *area)
-{
-	area->vm->flags &= ~(VM_PMALLOC | VM_PMALLOC_PROTECTED);
-}
-
-static __always_inline struct vmap_area *current_area(struct pmalloc_pool *pool)
-{
-	return llist_entry(pool->vm_areas.first, struct vmap_area,
-			   area_list);
-}
-
-static __always_inline bool is_area_protected(struct vmap_area *area)
-{
-	return area->vm->flags & VM_PMALLOC_PROTECTED;
-}
-
-static __always_inline void protect_area(struct vmap_area *area)
-{
-	if (unlikely(is_area_protected(area)))
-		return;
-	set_memory_ro(area->va_start, area->vm->nr_pages);
-	area->vm->flags |= VM_PMALLOC_PROTECTED;
-}
-
-static __always_inline void unprotect_area(struct vmap_area *area)
-{
-	if (likely(is_area_protected(area)))
-		set_memory_rw(area->va_start, area->vm->nr_pages);
-	untag_area(area);
-}
-
-static __always_inline void destroy_area(struct vmap_area *area)
-{
-	WARN(!is_area_protected(area), "Destroying unprotected area.");
-	unprotect_area(area);
-	vfree((void *)area->va_start);
-}
-
-static __always_inline bool empty(struct pmalloc_pool *pool)
-{
-	return unlikely(llist_empty(&pool->vm_areas));
-}
-
-static __always_inline bool protected(struct pmalloc_pool *pool)
-{
-	return is_area_protected(current_area(pool));
-}
-
-static inline bool exhausted(struct pmalloc_pool *pool, size_t size)
-{
-	size_t space_before;
-	size_t space_after;
-
-	space_before = round_down(pool->offset, pool->align);
-	space_after = pool->offset - space_before;
-	return unlikely(space_after < size && space_before < size);
-}
-
-static __always_inline bool space_needed(struct pmalloc_pool *pool, size_t size)
-{
-	return empty(pool) || protected(pool) || exhausted(pool, size);
-}
-
+#define MAX_ALIGN_ORDER (ilog2(sizeof(void *)))
 #define DEFAULT_REFILL_SIZE PAGE_SIZE
+
 /**
  * pmalloc_create_custom_pool() - create a new protectable memory pool
  * @refill: the minimum size to allocate when in need of more memory.
@@ -153,7 +78,7 @@ static int grow(struct pmalloc_pool *pool, size_t min_size)
 
 	area = find_vmap_area((unsigned long)addr);
 	tag_area(area);
-	pool->offset = area->vm->nr_pages * PAGE_SIZE;
+	pool->offset = get_area_pages_size(area);
 	llist_add(&area->area_list, &pool->vm_areas);
 	return 0;
 }
@@ -219,7 +144,6 @@ void pmalloc_protect_pool(struct pmalloc_pool *pool)
 }
 EXPORT_SYMBOL(pmalloc_protect_pool);
 
-
 /**
  * pmalloc_destroy_pool() - destroys a pool and all the associated memory
  * @pool: the pool to destroy
@@ -247,3 +171,4 @@ void pmalloc_destroy_pool(struct pmalloc_pool *pool)
 	}
 }
 EXPORT_SYMBOL(pmalloc_destroy_pool);
+

@@ -23,19 +23,6 @@
  * be destroyed.
  * Upon destruction of a certain pool, all the related memory is released,
  * including its metadata.
- *
- * Pmalloc memory is intended to complement __read_only_after_init.
- * It can be used, for example, where there is a write-once variable, for
- * which it is not possible to know the initialization value before init
- * is completed (which is what __read_only_after_init requires).
- *
- * It can be useful also where the amount of data to protect is not known
- * at compile time and the memory can only be allocated dynamically.
- *
- * Finally, it can be useful also when it is desirable to control
- * dynamically (for example throguh the command line) if something ought
- * to be protected or not, without having to rebuild the kernel (like in
- * the kernel binary files provided by a linux distro).
  */
 
 
@@ -155,9 +142,7 @@ static inline char *pstrdup(struct pmalloc_pool *pool, const char *s)
 	return buf;
 }
 
-
 void pmalloc_protect_pool(struct pmalloc_pool *pool);
-
 
 void pmalloc_destroy_pool(struct pmalloc_pool *pool);
 #endif

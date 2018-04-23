@@ -26,6 +26,8 @@
 #include <linux/sched/clock.h>
 #include <asm/sections.h>
 
+#include "pmalloc_helpers.h"
+
 /*
  * Checks if a given pointer and length is contained by the current
  * stack frame (if possible).
@@ -243,57 +245,6 @@ static inline void check_heap_object(const void *ptr, unsigned long n,
 		check_page_span(ptr, n, page, to_user);
 	}
 }
-
-#ifdef CONFIG_PROTECTABLE_MEMORY
-
-static inline int is_pmalloc_object(const void *ptr, const unsigned long n)
-{
-	struct vm_struct *area;
-	unsigned long start = (unsigned long)ptr;
-	unsigned long end = start + n;
-	unsigned long area_end;
-
-	if (likely(!is_vmalloc_addr(ptr)))
-		return false;
-
-	area = vmalloc_to_page(ptr)->area;
-	if (unlikely(!(area->flags & VM_PMALLOC)))
-		return false;
-
-	area_end = area->nr_pages * PAGE_SIZE + (unsigned long)area->addr;
-	return (start <= end) && (end <= area_end);
-}
-
-int __is_pmalloc_object(const void *ptr, const unsigned long n)
-{
-	return is_pmalloc_object(ptr, n);
-}
-
-static inline void check_pmalloc_object(const void *ptr, unsigned long n,
-					bool to_user)
-{
-	int retv;
-
-	retv = is_pmalloc_object(ptr, n);
-	if (unlikely(retv)) {
-		if (unlikely(!to_user))
-			usercopy_abort("pmalloc",
-				       "trying to write to pmalloc object",
-				       to_user, (const unsigned long)ptr, n);
-		if (retv < 0)
-			usercopy_abort("pmalloc",
-				       "invalid pmalloc object",
-				       to_user, (const unsigned long)ptr, n);
-	}
-}
-
-#else
-
-static inline void __check_pmalloc_object(const void *ptr, unsigned long n,
-					  bool to_user)
-{
-}
-#endif
 
 /*
  * Validates that the given object is:
