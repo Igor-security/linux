@@ -1,9 +1,9 @@
 Version: 1
-Previous: 2d073dcf777e63f9cf9723faac8c47c1f0d431a9
-Head: f96c23ec1943e7d64a1dc60b76176e9280429bc8
+Previous: fc840daf9c43afef7ea6ae8a0aa1cde59fa586da
+Head: e0dc9b96a9d4a3f060d78a854a5b251e7cb5ab32
 Applied:
+  documentation-for-pmalloc: e0dc9b96a9d4a3f060d78a854a5b251e7cb5ab32
 Unapplied:
-  documentation-for-pmalloc: 8adeb3a817c25da6a6a589639b18e1e12945e695
   pmalloc-selftest: 9169cd4323549d3242344ac3e7989145f2f9214a
   lkdtm-crash-on-overwriting: eaaf280a6ca453b381f01765a0017084027b15e2
   proto_rare_write: 1c6a119fb32ba0bf2040ac2abb82acd13b127a5d
