@@ -1,9 +1,9 @@
 Version: 1
-Previous: 6015bbb74660074fc544a8b9531f6f8d4d1d385c
-Head: 779b3ce37170708811d01356d93e516a03216dae
+Previous: 2a970c355e2077bd65625a0bc48a83a30ecd08d7
+Head: 75acb8cd7cbab919c5aebe9f43916648df8f1c6e
 Applied:
+  lkdtm-crash-on-overwriting: 75acb8cd7cbab919c5aebe9f43916648df8f1c6e
 Unapplied:
-  lkdtm-crash-on-overwriting: 2bfa5aced748ecfe592199d8715a95324958a15f
   pmalloc-rare-write-modify: fd828b4498261a90b1f413e19481e45596c5a54d
   preliminary-self-test-for: f2505c1f1f1eabbc19ab1736d4ce4138b0c69803
   protect-selinux-initialized: 0e89baa71443955dd7d08d231bcdcad606c9df17
