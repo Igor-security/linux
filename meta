@@ -1,9 +1,9 @@
 Version: 1
-Previous: 13bb0d6ed3c79af6dc1e4b0bdfc8a69277cd3879
-Head: 6ce958743196d34284712b215005083c1b34df6e
+Previous: e75f690b0242ac403e0e80a1d1fb121fb520a9ea
+Head: f6a30ad2100689e70d8b2f344633af1f67edce51
 Applied:
+  pmalloc-selftest: f6a30ad2100689e70d8b2f344633af1f67edce51
 Unapplied:
-  pmalloc-selftest: 9169cd4323549d3242344ac3e7989145f2f9214a
   lkdtm-crash-on-overwriting: eaaf280a6ca453b381f01765a0017084027b15e2
   proto_rare_write: 1c6a119fb32ba0bf2040ac2abb82acd13b127a5d
 Hidden:
