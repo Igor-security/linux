@@ -1,0 +1,44 @@
+Bottom: aa690e4dc0c74b5efad73beddee09981d4869199
+Top:    88e2102f51c1b1fc38bd620eb1b1ac64ade6bf47
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-04-23 10:18:13 +0400
+
+Refresh of proto_rare_write
+
+---
+
+diff --git a/Documentation/core-api/pmalloc.rst b/Documentation/core-api/pmalloc.rst
+index 734fdbd3b8c6..a8b072abdb72 100644
+--- a/Documentation/core-api/pmalloc.rst
++++ b/Documentation/core-api/pmalloc.rst
+@@ -10,14 +10,9 @@ Purpose
+ 
+ The pmalloc library is meant to provide read-only status to data that,
+ for some reason, could neither be declared as constant, nor could it take
+-<<<<<<< current
+-advantage of the qualifier __ro_after_init, but it is in spirit
+-write-once/read-only.
+-=======
+ advantage of the qualifier __ro_after_init.
+ But it is in spirit either fully write-once/read-only or at least
+ write-seldom/mostly-read-only.
+->>>>>>> patched
+ At some point it might get teared down, however that doesn't affect how it
+ is treated, while it's still relevant.
+ Pmalloc protects data from both accidental and malicious overwrites.
+@@ -43,15 +38,8 @@ minimum granularity that pmalloc allows to protect.
+ There might be special cases where an area contains only one page, but
+ they are still addressed as areas.
+ 
+-<<<<<<< current
+ Areas are allocated on-the-fly, when the space available is insufficient
+ for satisfying the latest request received.
+-=======
+-When a pool is created, it is possible to specify three parameters:
+-- refill size: the minimum size of the memory area to allocate when needed
+-- rewritable: if the content can be modified
+-- align_order: the default alignment to use when reserving memory
+->>>>>>> patched
+ 
+ To facilitate the conversion of existing code to pmalloc pools, several
+ helper functions are provided, mirroring their k/vmalloc counterparts.
