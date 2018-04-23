@@ -96,13 +96,13 @@ extern char *selinux_policycap_names[__POLICYDB_CAPABILITY_MAX];
 struct selinux_avc;
 struct selinux_ss;
 
+extern bool *ss_initialized_ptr;
 struct selinux_state {
 	bool disabled;
 #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
 	bool enforcing;
 #endif
 	bool checkreqprot;
-	bool initialized;
 	bool policycap[__POLICYDB_CAPABILITY_MAX];
 	struct selinux_avc *avc;
 	struct selinux_ss *ss;
