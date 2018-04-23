@@ -1,9 +1,9 @@
 Version: 1
-Previous: 34334a0a3e22cc9e376bf2ce607eba638162ddf1
-Head: 1ff09aa206d06b1859ca1328fff42b517b75d165
+Previous: c27db3736f65f5cb5c27ff9f703b8238d1769f5d
+Head: 7d6748728ac990113be0415246ab7af4b4665a8d
 Applied:
+  pmalloc-selftest: 7d6748728ac990113be0415246ab7af4b4665a8d
 Unapplied:
-  pmalloc-selftest: 6a6d932f4fa3862d38537fc1b4a54e22f4d4734c
   lkdtm-crash-on-overwriting: 96494e0f1e31a9e46e6e6cb2b77a5b1025dc503c
   pmalloc-rare-write-modify: fd828b4498261a90b1f413e19481e45596c5a54d
   preliminary-self-test-for: f2505c1f1f1eabbc19ab1736d4ce4138b0c69803
