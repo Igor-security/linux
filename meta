@@ -1,8 +1,7 @@
 Version: 1
-Previous: fc840daf9c43afef7ea6ae8a0aa1cde59fa586da
+Previous: f8bb64f1b0aeb21c3409e0b792d36858ee4accfa
 Head: e0dc9b96a9d4a3f060d78a854a5b251e7cb5ab32
 Applied:
-  documentation-for-pmalloc: e0dc9b96a9d4a3f060d78a854a5b251e7cb5ab32
 Unapplied:
   pmalloc-selftest: 9169cd4323549d3242344ac3e7989145f2f9214a
   lkdtm-crash-on-overwriting: eaaf280a6ca453b381f01765a0017084027b15e2
