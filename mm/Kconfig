@@ -754,17 +754,7 @@ config GUP_BENCHMARK
 	  See tools/testing/selftests/vm/gup_benchmark.c
 
 config PROTECTABLE_MEMORY
-    bool
-    depends on MMU
-    depends on ARCH_HAS_SET_MEMORY
-    default y
-
-config TEST_PROTECTABLE_MEMORY
-	bool "Run self test for pmalloc memory allocator"
-        depends on MMU
+	bool
+	depends on MMU
 	depends on ARCH_HAS_SET_MEMORY
-	select PROTECTABLE_MEMORY
-	default n
-	help
-	  Tries to verify that pmalloc works correctly and that the memory
-	  is effectively protected.
+	default y
