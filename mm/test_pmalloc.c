@@ -43,7 +43,7 @@ static bool create_and_destroy_pool(void)
 
 	pr_notice("Testing pool creation and destruction capability");
 
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Cannot allocate memory for pmalloc selftest."))
 		return false;
 	pmalloc_destroy_pool(pool);
@@ -58,7 +58,7 @@ static bool test_alloc(void)
 	static void *p;
 
 	pr_notice("Testing allocation capability");
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
 		return false;
 	p = pmalloc(pool,  SIZE_1 - 1);
@@ -84,7 +84,7 @@ static bool test_is_pmalloc_object(void)
 	if (WARN(!vmalloc_p,
 		 "Unable to allocate memory for pmalloc selftest."))
 		return false;
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
 		return false;
 	pmalloc_p = pmalloc(pool,  SIZE_1 - 1);
@@ -111,7 +111,7 @@ static void test_oovm(void)
 	unsigned int i;
 
 	pr_notice("Exhaust vmalloc memory with doubling allocations.");
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Failed to create pool"))
 		return;
 	for (i = 1; i; i *= 2)
@@ -121,6 +121,25 @@ static void test_oovm(void)
 	pmalloc_protect_pool(pool);
 	pmalloc_destroy_pool(pool);
 }
+
+/* Verify rewritable feature. */
+static void test_rare_write(void)
+{
+	struct pmalloc_pool *pool;
+	char *v1;
+	char v2;
+
+
+	pr_notice("Test pmalloc_rare_write()");
+	pool = pmalloc_create_pool(PMALLOC_RW);
+	v1 = pzalloc(pool, PAGE_SIZE * 2);
+	*v1 = 33;
+	v2 = 17;
+	pr_info("pippo *v1 = %d", (int)*v1);
+	pmalloc_rare_write(pool, v1, &v2, 1);
+	pr_info("pippo *v1 = %d", (int)*v1);
+}
+
 
 /**
  * test_pmalloc()  -main entry point for running the test cases
@@ -135,4 +154,5 @@ void test_pmalloc(void)
 		       test_is_pmalloc_object())))
 		return;
 	test_oovm();
+	test_rare_write();
 }
