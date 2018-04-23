@@ -1,7 +1,8 @@
 Version: 1
-Previous: fa42ea39d3b77332bdce7828e2a675e5837ca197
+Previous: bd64093891840da3d7ec8fb0b4f45d19d3bc2406
 Head: bbd60c3473916a85d00db0365d85ca1aa0e7c420
 Applied:
+  boh_test_pmalloc: bbd60c3473916a85d00db0365d85ca1aa0e7c420
 Unapplied:
   proto_rare_write: 1c6a119fb32ba0bf2040ac2abb82acd13b127a5d
 Hidden:
