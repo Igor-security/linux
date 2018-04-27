@@ -1943,6 +1943,29 @@ config TEST_DEBUG_VIRTUAL
 
 	  If unsure, say N.
 
+config TEST_GENERIC_ALLOCATOR
+	tristate "genalloc tester"
+	default n
+	depends on GENERIC_ALLOCATOR
+	help
+	  Enable automated testing of the generic allocator.
+	  The testing is primarily for the tracking of allocated space,
+	  in particular, it tests that the size of each allcoation can be
+	  determined correctly.
+
+	  If unsure, say N.
+
+config TEST_GENERIC_ALLOCATOR_VERBOSE
+	bool "make the genalloc tester more verbose"
+	default n
+	depends on TEST_GENERIC_ALLOCATOR
+	help
+	  During the self-testing, it will be possibe to visualize the bit
+	  patterns that are expected to be produced by the sequence of
+	  memory-oriented operations.
+
+	  If unsure, say N
+
 endif # RUNTIME_TESTING_MENU
 
 config MEMTEST
