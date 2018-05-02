@@ -6,9 +6,10 @@
  * Author: Igor Stoppa <igor.stoppa@huawei.com>
  */
 
+#include <linux/init.h>
+#include <linux/module.h>
 #include <linux/pmalloc.h>
 #include <linux/mm.h>
-#include <linux/test_pmalloc.h>
 #include <linux/bug.h>
 
 #include "pmalloc_helpers.h"
@@ -104,24 +105,6 @@ error:
 	return retval;
 }
 
-/* Test out of virtually contiguous memory */
-static void test_oovm(void)
-{
-	struct pmalloc_pool *pool;
-	unsigned int i;
-
-	pr_notice("Exhaust vmalloc memory with doubling allocations.");
-	pool = pmalloc_create_pool(PMALLOC_RO);
-	if (WARN(!pool, "Failed to create pool"))
-		return;
-	for (i = 1; i; i *= 2)
-		if (unlikely(!pzalloc(pool, i - 1)))
-			break;
-	pr_notice("vmalloc oom at %d allocation", i - 1);
-	pmalloc_protect_pool(pool);
-	pmalloc_destroy_pool(pool);
-}
-
 #define REGION_SIZE (PAGE_SIZE / 4)
 #define REGION_NUMBERS 12
 static inline void fill_region(char *addr, char c)
@@ -199,15 +182,27 @@ static int test_rare_write(void)
 /**
  * test_pmalloc()  -main entry point for running the test cases
  */
-void test_pmalloc(void)
-{
 
+static int __init test_pmalloc_init_module(void)
+{
 	pr_notice("pmalloc-selftest");
 
 	if (unlikely(!(create_and_destroy_pool() &&
 		       test_alloc() &&
 		       test_is_pmalloc_object())))
-		return;
-	test_oovm();
+		return -1;
 	test_rare_write();
+	return 0;
 }
+
+module_init(test_pmalloc_init_module);
+
+static void __exit test_pmalloc_cleanup_module(void)
+{
+}
+
+module_exit(test_pmalloc_cleanup_module);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Igor Stoppa <igor.stoppa@huawei.com>");
+MODULE_DESCRIPTION("Test module for pmalloc.");
