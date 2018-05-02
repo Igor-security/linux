@@ -1,7 +1,7 @@
 Version: 1
-Previous: 09f96c4dd98434bf5afacde91e48b48c458c74a1
-Head: c0e20700e3e6ffea6764c6cd348af3c103040670
+Previous: de611c75e37fdd4c2279feb334cc8e5e4c757ae3
+Head: 0263802140c96f6b65164b511156d271e3cfeb2b
 Applied:
-  protect-selinux-initialized: c0e20700e3e6ffea6764c6cd348af3c103040670
 Unapplied:
+  protect-selinux-initialized: c0e20700e3e6ffea6764c6cd348af3c103040670
 Hidden:
