@@ -1,4 +1,4 @@
-Bottom: 3357434ab340d7ce92e9113254f196a8ec13c6d2
+Bottom: c3547e03481d7e5656ed20954942c760576d9770
 Top:    3744faa357120878782865d2dcc3084bad09af9c
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-04-18 13:43:09 +0400
@@ -196,36 +196,6 @@ index eebaf1ebc6f3..0aab95074aa8 100644
 +
  void pmalloc_destroy_pool(struct pmalloc_pool *pool);
  #endif
-diff --git a/include/linux/test_pmalloc.h b/include/linux/test_pmalloc.h
-deleted file mode 100644
-index c7e2e451c17c..000000000000
---- a/include/linux/test_pmalloc.h
-+++ /dev/null
-@@ -1,24 +0,0 @@
--/* SPDX-License-Identifier: GPL-2.0 */
--/*
-- * test_pmalloc.h
-- *
-- * (C) Copyright 2018 Huawei Technologies Co. Ltd.
-- * Author: Igor Stoppa <igor.stoppa@huawei.com>
-- */
--
--
--#ifndef __LINUX_TEST_PMALLOC_H
--#define __LINUX_TEST_PMALLOC_H
--
--
--#ifdef CONFIG_TEST_PROTECTABLE_MEMORY
--
--void test_pmalloc(void);
--
--#else
--
--static inline void test_pmalloc(void){};
--
--#endif
--
--#endif
 diff --git a/include/linux/vmalloc.h b/include/linux/vmalloc.h
 index 69c12f21200f..d0b747a78271 100644
 --- a/include/linux/vmalloc.h
