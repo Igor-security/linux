@@ -1,9 +1,9 @@
 Version: 1
-Previous: d3828ee11ada310fe7a9eee65174ff36468fa75c
-Head: d9b3460772a11bdf814b66f2d97cacb11b12ba3d
+Previous: 2497034029fa05c2b2f83a22b85d80d2ef3fcbef
+Head: a73625fd22b8300157438f9d6214e0196719992f
 Applied:
+  pmalloc-rare-write-modify: a73625fd22b8300157438f9d6214e0196719992f
 Unapplied:
-  pmalloc-rare-write-modify: 64db2ec092e14bb20b5b8f7e708be8213f018b25
   preliminary-self-test-for: 04145a3cde7d5bf694b3ca7d568f64648e7a86e2
   protect-selinux-initialized: 8ac50c1660ea6c93c66eb7f1ae3b828f0a84a726
 Hidden:
