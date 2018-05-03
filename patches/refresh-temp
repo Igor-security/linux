@@ -1,0 +1,25 @@
+Bottom: 3fcc3b66174c50dfa6990da79969ba0f1d47d940
+Top:    2320800b501a6466c5d367bf27d76de089454cc9
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-05-03 15:30:25 +0400
+
+Refresh of preliminary-self-test-for
+
+---
+
+diff --git a/mm/Kconfig b/mm/Kconfig
+index adf42739d8a4..d7ef40eaa4e8 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -754,7 +754,7 @@ config GUP_BENCHMARK
+ 	  See tools/testing/selftests/vm/gup_benchmark.c
+ 
+ config PROTECTABLE_MEMORY
+-	bool
+-	depends on MMU
+-	depends on ARCH_HAS_SET_MEMORY
+-	default y
++    bool
++    depends on MMU
++    depends on ARCH_HAS_SET_MEMORY
++    default y
