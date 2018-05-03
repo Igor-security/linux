@@ -1,5 +1,5 @@
 Bottom: 2ccd1921d665cc70f79a29d81aa94b2687ab4011
-Top:    2320800b501a6466c5d367bf27d76de089454cc9
+Top:    c0762fd9e1a128f21e1a52a24375b3af06fcd4dc
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-04-23 15:22:23 +0400
 
@@ -14,31 +14,6 @@ Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
 
 ---
 
-diff --git a/mm/Kconfig.debug b/mm/Kconfig.debug
-index dd6ffbe361d7..15ecaa2ae96a 100644
---- a/mm/Kconfig.debug
-+++ b/mm/Kconfig.debug
-@@ -95,13 +95,12 @@ config DEBUG_RODATA_TEST
-     ---help---
-       This option enables a testcase for the setting rodata read-only.
- 
--
- config TEST_PROTECTABLE_MEMORY
--       tristate "Run self test for pmalloc memory allocator"
-+	tristate "Run self test for pmalloc memory allocator"
-         depends on MMU
--       depends on ARCH_HAS_SET_MEMORY
--       select PROTECTABLE_MEMORY
--       default n
--       help
--         Tries to verify that pmalloc works correctly and that the memory
--         is effectively protected.
-+	depends on ARCH_HAS_SET_MEMORY
-+	select PROTECTABLE_MEMORY
-+	default n
-+	help
-+	  Tries to verify that pmalloc works correctly and that the memory
-+	  is effectively protected.
 diff --git a/mm/test_pmalloc.c b/mm/test_pmalloc.c
 index c8835207a400..43b764e2fb02 100644
 --- a/mm/test_pmalloc.c
