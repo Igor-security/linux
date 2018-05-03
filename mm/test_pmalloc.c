@@ -106,13 +106,26 @@ error:
 /**
  * test_pmalloc()  -main entry point for running the test cases
  */
-void test_pmalloc(void)
-{
 
+static int __init test_pmalloc_init_module(void)
+{
 	pr_notice("pmalloc-selftest");
 
 	if (unlikely(!(create_and_destroy_pool() &&
 		       test_alloc() &&
 		       test_is_pmalloc_object())))
-		return;
+		return -1;
+	return 0;
 }
+
+module_init(test_pmalloc_init_module);
+
+static void __exit test_pmalloc_cleanup_module(void)
+{
+}
+
+module_exit(test_pmalloc_cleanup_module);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Igor Stoppa <igor.stoppa@huawei.com>");
+MODULE_DESCRIPTION("Test module for pmalloc.");
