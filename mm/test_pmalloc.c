@@ -8,7 +8,6 @@
 
 #include <linux/pmalloc.h>
 #include <linux/mm.h>
-#include <linux/test_pmalloc.h>
 #include <linux/bug.h>
 
 #include "pmalloc_helpers.h"
@@ -104,24 +103,6 @@ error:
 	return retval;
 }
 
-/* Test out of virtually contiguous memory */
-static void test_oovm(void)
-{
-	struct pmalloc_pool *pool;
-	unsigned int i;
-
-	pr_notice("Exhaust vmalloc memory with doubling allocations.");
-	pool = pmalloc_create_pool(PMALLOC_RO);
-	if (WARN(!pool, "Failed to create pool"))
-		return;
-	for (i = 1; i; i *= 2)
-		if (unlikely(!pzalloc(pool, i - 1)))
-			break;
-	pr_notice("vmalloc oom at %d allocation", i - 1);
-	pmalloc_protect_pool(pool);
-	pmalloc_destroy_pool(pool);
-}
-
 /**
  * test_pmalloc()  -main entry point for running the test cases
  */
@@ -134,5 +115,4 @@ void test_pmalloc(void)
 		       test_alloc() &&
 		       test_is_pmalloc_object())))
 		return;
-	test_oovm();
 }
