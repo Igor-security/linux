@@ -1,4 +1,4 @@
-Bottom: b80950e45e7643d3b170a76ac0900fa128711f31
+Bottom: f1c5e8d676bfb8c3dfc479ef05892b56fb3d84d0
 Top:    7ab7cae034991f692490622a8cf4e383690606c4
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-04-18 13:43:09 +0400
@@ -210,27 +210,6 @@ index 69c12f21200f..d0b747a78271 100644
  /* bits [20..32] reserved for arch specific ioremap internals */
  
  /*
-diff --git a/init/main.c b/init/main.c
-index 27f8479c4578..e5beafcae8e2 100644
---- a/init/main.c
-+++ b/init/main.c
-@@ -91,7 +91,6 @@
- #include <linux/cache.h>
- #include <linux/rodata_test.h>
- #include <linux/jump_label.h>
--#include <linux/test_pmalloc.h>
- 
- #include <asm/io.h>
- #include <asm/bugs.h>
-@@ -679,8 +678,6 @@ asmlinkage __visible void __init start_kernel(void)
- 	 * not cause "plain-text" data to be decrypted when accessed.
- 	 */
- 	mem_encrypt_init();
--
--	test_pmalloc();
- #ifdef CONFIG_BLK_DEV_INITRD
- 	if (initrd_start && !initrd_below_start_ok &&
- 	    page_to_pfn(virt_to_page((void *)initrd_start)) < min_low_pfn) {
 diff --git a/mm/pmalloc.c b/mm/pmalloc.c
 index ddaef41837f4..ca7f10b50b25 100644
 --- a/mm/pmalloc.c
