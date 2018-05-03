@@ -1,9 +1,8 @@
 Version: 1
-Previous: 8d8b14e32c5b794c188cbb54efab769b7ef847bf
-Head: 81cd08fe6d2d26e943afb6d29d24bc54891c7343
+Previous: e3d85062c4b87f9e09e639f0c140f040739c99a9
+Head: 3946e6b763ec8821111d1b10accebddce9e1e072
 Applied:
-  preliminary-self-test-for: 9bae61936eb279d7ef4e10c22deb2bd7c249c740
-  refresh-temp: 81cd08fe6d2d26e943afb6d29d24bc54891c7343
+  preliminary-self-test-for: 3946e6b763ec8821111d1b10accebddce9e1e072
 Unapplied:
   protect-selinux-initialized: c0e20700e3e6ffea6764c6cd348af3c103040670
 Hidden:
