@@ -1,0 +1,23 @@
+Bottom: a9e6607be07dff65b7d95485c0884283f2ce9536
+Top:    3fcc3b66174c50dfa6990da79969ba0f1d47d940
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-05-03 15:29:49 +0400
+
+Refresh of preliminary-self-test-for
+
+---
+
+diff --git a/mm/Kconfig b/mm/Kconfig
+index d5004d82a1d6..adf42739d8a4 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -752,3 +752,9 @@ config GUP_BENCHMARK
+ 	  performance of get_user_pages_fast().
+ 
+ 	  See tools/testing/selftests/vm/gup_benchmark.c
++
++config PROTECTABLE_MEMORY
++	bool
++	depends on MMU
++	depends on ARCH_HAS_SET_MEMORY
++	default y
