@@ -1,4 +1,4 @@
-Bottom: cb67ebd9053b1c816b1460eccd73b09dc2215ab7
+Bottom: 23aebb4d46fe59dd3e291e9a1110c94f2ede7a9d
 Top:    2320800b501a6466c5d367bf27d76de089454cc9
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-04-23 15:22:23 +0400
@@ -14,57 +14,6 @@ Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
 
 ---
 
-diff --git a/include/linux/test_pmalloc.h b/include/linux/test_pmalloc.h
-deleted file mode 100644
-index c7e2e451c17c..000000000000
---- a/include/linux/test_pmalloc.h
-+++ /dev/null
-@@ -1,24 +0,0 @@
--/* SPDX-License-Identifier: GPL-2.0 */
--/*
-- * test_pmalloc.h
-- *
-- * (C) Copyright 2018 Huawei Technologies Co. Ltd.
-- * Author: Igor Stoppa <igor.stoppa@huawei.com>
-- */
--
--
--#ifndef __LINUX_TEST_PMALLOC_H
--#define __LINUX_TEST_PMALLOC_H
--
--
--#ifdef CONFIG_TEST_PROTECTABLE_MEMORY
--
--void test_pmalloc(void);
--
--#else
--
--static inline void test_pmalloc(void){};
--
--#endif
--
--#endif
-diff --git a/init/main.c b/init/main.c
-index 27f8479c4578..e5beafcae8e2 100644
---- a/init/main.c
-+++ b/init/main.c
-@@ -91,7 +91,6 @@
- #include <linux/cache.h>
- #include <linux/rodata_test.h>
- #include <linux/jump_label.h>
--#include <linux/test_pmalloc.h>
- 
- #include <asm/io.h>
- #include <asm/bugs.h>
-@@ -679,8 +678,6 @@ asmlinkage __visible void __init start_kernel(void)
- 	 * not cause "plain-text" data to be decrypted when accessed.
- 	 */
- 	mem_encrypt_init();
--
--	test_pmalloc();
- #ifdef CONFIG_BLK_DEV_INITRD
- 	if (initrd_start && !initrd_below_start_ok &&
- 	    page_to_pfn(virt_to_page((void *)initrd_start)) < min_low_pfn) {
 diff --git a/mm/Kconfig b/mm/Kconfig
 index f98b4c0aebce..d7ef40eaa4e8 100644
 --- a/mm/Kconfig
