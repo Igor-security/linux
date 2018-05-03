@@ -44,7 +44,7 @@ static bool create_and_destroy_pool(void)
 
 	pr_notice("Testing pool creation and destruction capability");
 
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Cannot allocate memory for pmalloc selftest."))
 		return false;
 	pmalloc_destroy_pool(pool);
@@ -59,7 +59,7 @@ static bool test_alloc(void)
 	static void *p;
 
 	pr_notice("Testing allocation capability");
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
 		return false;
 	p = pmalloc(pool,  SIZE_1 - 1);
@@ -85,7 +85,7 @@ static bool test_is_pmalloc_object(void)
 	if (WARN(!vmalloc_p,
 		 "Unable to allocate memory for pmalloc selftest."))
 		return false;
-	pool = pmalloc_create_pool();
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
 		return false;
 	pmalloc_p = pmalloc(pool,  SIZE_1 - 1);
@@ -108,13 +108,26 @@ error:
 /**
  * test_pmalloc()  -main entry point for running the test cases
  */
-void test_pmalloc(void)
-{
 
+static int __init test_pmalloc_init_module(void)
+{
 	pr_notice("pmalloc-selftest");
 
 	if (unlikely(!(create_and_destroy_pool() &&
 		       test_alloc() &&
 		       test_is_pmalloc_object())))
-		return;
+		return -1;
+	return 0;
 }
+
+module_init(test_pmalloc_init_module);
+
+static void __exit test_pmalloc_cleanup_module(void)
+{
+}
+
+module_exit(test_pmalloc_cleanup_module);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Igor Stoppa <igor.stoppa@huawei.com>");
+MODULE_DESCRIPTION("Test module for pmalloc.");
