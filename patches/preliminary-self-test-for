@@ -1,4 +1,4 @@
-Bottom: 23aebb4d46fe59dd3e291e9a1110c94f2ede7a9d
+Bottom: 995a749171654a48a629b2272a98c8c45c9cbf71
 Top:    2320800b501a6466c5d367bf27d76de089454cc9
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-04-23 15:22:23 +0400
@@ -14,24 +14,6 @@ Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
 
 ---
 
-diff --git a/mm/Kconfig b/mm/Kconfig
-index f98b4c0aebce..d7ef40eaa4e8 100644
---- a/mm/Kconfig
-+++ b/mm/Kconfig
-@@ -758,13 +758,3 @@ config PROTECTABLE_MEMORY
-     depends on MMU
-     depends on ARCH_HAS_SET_MEMORY
-     default y
--
--config TEST_PROTECTABLE_MEMORY
--	bool "Run self test for pmalloc memory allocator"
--        depends on MMU
--	depends on ARCH_HAS_SET_MEMORY
--	select PROTECTABLE_MEMORY
--	default n
--	help
--	  Tries to verify that pmalloc works correctly and that the memory
--	  is effectively protected.
 diff --git a/mm/Kconfig.debug b/mm/Kconfig.debug
 index e5e606ee5f71..15ecaa2ae96a 100644
 --- a/mm/Kconfig.debug
