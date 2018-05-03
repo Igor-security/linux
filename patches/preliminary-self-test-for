@@ -1,0 +1,239 @@
+Bottom: cb67ebd9053b1c816b1460eccd73b09dc2215ab7
+Top:    2320800b501a6466c5d367bf27d76de089454cc9
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-04-23 15:22:23 +0400
+
+Preliminary self test for pmalloc rare write
+
+Try to alter locked but modifiable pools.
+The test neds some cleanup and expansion.
+It is provided primarily as reference.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+
+---
+
+diff --git a/include/linux/test_pmalloc.h b/include/linux/test_pmalloc.h
+deleted file mode 100644
+index c7e2e451c17c..000000000000
+--- a/include/linux/test_pmalloc.h
++++ /dev/null
+@@ -1,24 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0 */
+-/*
+- * test_pmalloc.h
+- *
+- * (C) Copyright 2018 Huawei Technologies Co. Ltd.
+- * Author: Igor Stoppa <igor.stoppa@huawei.com>
+- */
+-
+-
+-#ifndef __LINUX_TEST_PMALLOC_H
+-#define __LINUX_TEST_PMALLOC_H
+-
+-
+-#ifdef CONFIG_TEST_PROTECTABLE_MEMORY
+-
+-void test_pmalloc(void);
+-
+-#else
+-
+-static inline void test_pmalloc(void){};
+-
+-#endif
+-
+-#endif
+diff --git a/init/main.c b/init/main.c
+index 27f8479c4578..e5beafcae8e2 100644
+--- a/init/main.c
++++ b/init/main.c
+@@ -91,7 +91,6 @@
+ #include <linux/cache.h>
+ #include <linux/rodata_test.h>
+ #include <linux/jump_label.h>
+-#include <linux/test_pmalloc.h>
+ 
+ #include <asm/io.h>
+ #include <asm/bugs.h>
+@@ -679,8 +678,6 @@ asmlinkage __visible void __init start_kernel(void)
+ 	 * not cause "plain-text" data to be decrypted when accessed.
+ 	 */
+ 	mem_encrypt_init();
+-
+-	test_pmalloc();
+ #ifdef CONFIG_BLK_DEV_INITRD
+ 	if (initrd_start && !initrd_below_start_ok &&
+ 	    page_to_pfn(virt_to_page((void *)initrd_start)) < min_low_pfn) {
+diff --git a/mm/Kconfig b/mm/Kconfig
+index f98b4c0aebce..d7ef40eaa4e8 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -758,13 +758,3 @@ config PROTECTABLE_MEMORY
+     depends on MMU
+     depends on ARCH_HAS_SET_MEMORY
+     default y
+-
+-config TEST_PROTECTABLE_MEMORY
+-	bool "Run self test for pmalloc memory allocator"
+-        depends on MMU
+-	depends on ARCH_HAS_SET_MEMORY
+-	select PROTECTABLE_MEMORY
+-	default n
+-	help
+-	  Tries to verify that pmalloc works correctly and that the memory
+-	  is effectively protected.
+diff --git a/mm/Kconfig.debug b/mm/Kconfig.debug
+index e5e606ee5f71..15ecaa2ae96a 100644
+--- a/mm/Kconfig.debug
++++ b/mm/Kconfig.debug
+@@ -94,3 +94,13 @@ config DEBUG_RODATA_TEST
+     depends on STRICT_KERNEL_RWX
+     ---help---
+       This option enables a testcase for the setting rodata read-only.
++
++config TEST_PROTECTABLE_MEMORY
++	tristate "Run self test for pmalloc memory allocator"
++        depends on MMU
++	depends on ARCH_HAS_SET_MEMORY
++	select PROTECTABLE_MEMORY
++	default n
++	help
++	  Tries to verify that pmalloc works correctly and that the memory
++	  is effectively protected.
+diff --git a/mm/test_pmalloc.c b/mm/test_pmalloc.c
+index c8835207a400..43b764e2fb02 100644
+--- a/mm/test_pmalloc.c
++++ b/mm/test_pmalloc.c
+@@ -6,9 +6,10 @@
+  * Author: Igor Stoppa <igor.stoppa@huawei.com>
+  */
+ 
++#include <linux/init.h>
++#include <linux/module.h>
+ #include <linux/pmalloc.h>
+ #include <linux/mm.h>
+-#include <linux/test_pmalloc.h>
+ #include <linux/bug.h>
+ 
+ #include "pmalloc_helpers.h"
+@@ -104,35 +105,104 @@ static bool test_is_pmalloc_object(void)
+ 	return retval;
+ }
+ 
+-/* Test out of virtually contiguous memory */
+-static void test_oovm(void)
++#define REGION_SIZE (PAGE_SIZE / 4)
++#define REGION_NUMBERS 12
++static inline void fill_region(char *addr, char c)
++{
++	size_t i;
++
++	for (i = 0; i < REGION_SIZE - 1; i++)
++		addr[i] = c;
++	addr[i] = '\0';
++}
++
++static inline void init_regions(char *array)
++{
++	size_t i;
++
++	for (i = 0; i < REGION_NUMBERS; i++)
++		fill_region(array + REGION_SIZE * i, i + 'A');
++}
++
++static inline void show_regions(char *array)
++{
++	size_t i;
++
++	for (i = 0; i < REGION_NUMBERS; i++)
++		pr_info("%s", array + REGION_SIZE * i);
++}
++
++static inline void init_big_injection(char *big_injection)
++{
++	size_t i;
++
++	for (i = 0; i < PAGE_SIZE * 3; i++)
++		big_injection[i] = 'X';
++}
++
++/* Verify rewritable feature. */
++static int test_rare_write(void)
+ {
+ 	struct pmalloc_pool *pool;
+-	unsigned int i;
++	char *array;
++	char injection[] = "123456789";
++	unsigned short size = sizeof(injection);
++	char *big_injection;
+ 
+-	pr_notice("Exhaust vmalloc memory with doubling allocations.");
+-	pool = pmalloc_create_pool(PMALLOC_RO);
+-	if (WARN(!pool, "Failed to create pool"))
+-		return;
+-	for (i = 1; i; i *= 2)
+-		if (unlikely(!pzalloc(pool, i - 1)))
+-			break;
+-	pr_notice("vmalloc oom at %d allocation", i - 1);
++
++	pr_notice("Test pmalloc_rare_write()");
++	pool = pmalloc_create_pool(PMALLOC_RW);
++	array = pzalloc(pool, REGION_SIZE * REGION_NUMBERS);
++	init_regions(array);
+ 	pmalloc_protect_pool(pool);
++	pr_info("------------------------------------------------------");
++	pmalloc_rare_write(pool, array, injection, size);
++	pmalloc_rare_write(pool, array + REGION_SIZE, injection, size);
++	pmalloc_rare_write(pool,
++			   array + 5 * REGION_SIZE / 2 - size / 2,
++			   injection, size);
++	pmalloc_rare_write(pool, array + 3 * REGION_SIZE - size / 2,
++			   injection, size);
++	show_regions(array);
+ 	pmalloc_destroy_pool(pool);
++	pr_info("------------------------------------------------------");
++	pool = pmalloc_create_pool(PMALLOC_RW);
++	array = pzalloc(pool, REGION_SIZE * REGION_NUMBERS);
++	init_regions(array);
++	pmalloc_protect_pool(pool);
++	big_injection = vmalloc(PAGE_SIZE * 3);
++	init_big_injection(big_injection);
++	pmalloc_rare_write(pool, array + REGION_SIZE / 2, big_injection,
++			   PAGE_SIZE * 2);
++	show_regions(array);
++	pr_info("------------------------------------------------------");
++	return 0;
+ }
+ 
+ /**
+  * test_pmalloc()  -main entry point for running the test cases
+  */
+-void test_pmalloc(void)
+-{
+ 
++static int __init test_pmalloc_init_module(void)
++{
+ 	pr_notice("pmalloc-selftest");
+ 
+ 	if (unlikely(!(create_and_destroy_pool() &&
+ 		       test_alloc() &&
+ 		       test_is_pmalloc_object())))
+-		return;
+-	test_oovm();
++		return -1;
++	test_rare_write();
++	return 0;
+ }
++
++module_init(test_pmalloc_init_module);
++
++static void __exit test_pmalloc_cleanup_module(void)
++{
++}
++
++module_exit(test_pmalloc_cleanup_module);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Igor Stoppa <igor.stoppa@huawei.com>");
++MODULE_DESCRIPTION("Test module for pmalloc.");
