@@ -1,7 +1,8 @@
 Version: 1
-Previous: 9442750b39742704324ef17831e88b709f8c715c
+Previous: f3b05ff3389fe66e10f5bc37e75785df37a182f2
 Head: cf8bc0eebbf53cf86f73a3e0710099ce08cb84cf
 Applied:
+  pmalloc-rare-write-modify: cf8bc0eebbf53cf86f73a3e0710099ce08cb84cf
 Unapplied:
   preliminary-self-test-for: 16b5c15e0c65db04ddd4660682d888f8b606973e
 Hidden:
