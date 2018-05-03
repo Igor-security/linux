@@ -6,6 +6,8 @@
  * Author: Igor Stoppa <igor.stoppa@huawei.com>
  */
 
+#include <linux/init.h>
+#include <linux/module.h>
 #include <linux/pmalloc.h>
 #include <linux/mm.h>
 #include <linux/bug.h>
