@@ -1,9 +1,6 @@
 Version: 1
-Previous: da7080f7d99075b432bf5a6933954f6f86b5fbae
+Previous: d32e6ce9fc46c893eef933a045d84815f470c0a7
 Head: e19914eec3b27a7af397141b7e215396eeb14618
 Applied:
-  lkdtm-crash-on-overwriting: 7c245925d5518ba31f2500a564140128cc67347d
-  pmalloc-rare-write-modify: bfdf68137205ff480f1fd61764011a1b6abcac72
-  preliminary-self-test-for: e19914eec3b27a7af397141b7e215396eeb14618
 Unapplied:
 Hidden:
