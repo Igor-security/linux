@@ -1,4 +1,4 @@
-Bottom: 690730f535a6144ac5062a571d49dbb3464d960b
+Bottom: 2e2bf01ba3537c0f46bec845e0111fe5054582d8
 Top:    3744faa357120878782865d2dcc3084bad09af9c
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-04-18 13:43:09 +0400
@@ -509,7 +509,7 @@ index 52d4d899e173..538e37564f8f 100644
  #endif
  #endif
 diff --git a/mm/test_pmalloc.c b/mm/test_pmalloc.c
-index 4dfbb0b4993f..68a6d7b4430c 100644
+index 7ad4a3f703b0..68a6d7b4430c 100644
 --- a/mm/test_pmalloc.c
 +++ b/mm/test_pmalloc.c
 @@ -44,7 +44,7 @@ static bool create_and_destroy_pool(void)
@@ -539,33 +539,3 @@ index 4dfbb0b4993f..68a6d7b4430c 100644
  	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
  		return false;
  	pmalloc_p = pmalloc(pool,  SIZE_1 - 1);
-@@ -108,13 +108,26 @@ static bool test_is_pmalloc_object(void)
- /**
-  * test_pmalloc()  -main entry point for running the test cases
-  */
--void test_pmalloc(void)
--{
- 
-+static int __init test_pmalloc_init_module(void)
-+{
- 	pr_notice("pmalloc-selftest");
- 
- 	if (unlikely(!(create_and_destroy_pool() &&
- 		       test_alloc() &&
- 		       test_is_pmalloc_object())))
--		return;
-+		return -1;
-+	return 0;
-+}
-+
-+module_init(test_pmalloc_init_module);
-+
-+static void __exit test_pmalloc_cleanup_module(void)
-+{
- }
-+
-+module_exit(test_pmalloc_cleanup_module);
-+
-+MODULE_LICENSE("GPL");
-+MODULE_AUTHOR("Igor Stoppa <igor.stoppa@huawei.com>");
-+MODULE_DESCRIPTION("Test module for pmalloc.");
