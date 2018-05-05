@@ -11,6 +11,7 @@
 #include <linux/pmalloc.h>
 #include <linux/mm.h>
 #include <linux/bug.h>
+#include <linux/set_memory.h>
 
 #include "pmalloc_helpers.h"
 
@@ -179,6 +180,29 @@ static int test_rare_write(void)
 	return 0;
 }
 
+
+static void  test_phys_map(void)
+{
+	unsigned int *i;
+	unsigned int *j;
+	unsigned int *k;
+
+	i = vmalloc(sizeof(*i));
+	*i = 42;
+//	set_memory_ro((long unsigned int)i, 1);
+	pr_info("XXXXXXX *i: %d\n", *i);
+//	j = page_to_virt(pfn_to_page(page_to_pfn(vmalloc_to_page(i))));
+	j = page_to_virt(vmalloc_to_page(i));
+	k = virt_to_phys(j);
+	pr_info("XXXXXXX i: 0x%08lx   j: 0x%08lx  k: 0x%08lx\n",
+		(long unsigned int)i, (long unsigned int)j,
+		(long unsigned int)k);
+	pr_info("XXXXXXX *i: %d    *j: %d     *k: %d\n", *i, *j, *k);
+	*k = 13;
+	pr_info("XXXXXXX *i: %d    *j: %d     *k: %d\n", *i, *j, *k);
+
+}
+
 /**
  * test_pmalloc()  -main entry point for running the test cases
  */
@@ -192,6 +216,7 @@ static int __init test_pmalloc_init_module(void)
 		       test_is_pmalloc_object())))
 		return -1;
 	test_rare_write();
+	test_phys_map();
 	return 0;
 }
 
