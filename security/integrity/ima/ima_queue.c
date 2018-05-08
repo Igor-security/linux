@@ -24,11 +24,14 @@
 #include <linux/module.h>
 #include <linux/rculist.h>
 #include <linux/slab.h>
+#include <linux/prot_list.h>
 #include "ima.h"
 
 #define AUDIT_CAUSE_LEN_MAX 32
 
-LIST_HEAD(ima_measurements);	/* list of all measurements */
+static struct pmalloc_pool *ima_measurements_pool __ro_after_init;
+struct prot_head *ima_measurements_ptr __ro_after_init;
+
 #ifdef CONFIG_IMA_KEXEC
 static unsigned long binary_runtime_size;
 #else
@@ -107,7 +110,7 @@ static int ima_add_digest_entry(struct ima_template_entry *entry,
 	qe->entry = entry;
 
 	INIT_LIST_HEAD(&qe->later);
-	list_add_tail_rcu(&qe->later, &ima_measurements);
+	list_add_tail_rcu(&qe->later, (struct list_head *)ima_measurements_ptr);
 
 	atomic_long_inc(&ima_htable.len);
 	if (update_htable) {
@@ -212,3 +215,21 @@ int ima_restore_measurement_entry(struct ima_template_entry *entry)
 	mutex_unlock(&ima_extend_list_mutex);
 	return result;
 }
+
+static int __init init_ima_measurements(void)
+{
+	ima_measurements_pool = pmalloc_create_pool(PMALLOC_START_RW |
+						    PMALLOC_SHIFT_RW_RO);
+	ima_measurements_ptr = pmalloc(ima_measurements_pool,
+				       sizeof(struct list_head));
+	if (unlikely(!ima_measurements_ptr))
+		return -ENOMEM;
+	pr_info("next: %p   prev: %p",
+		ima_measurements_ptr->next, ima_measurements_ptr->prev);
+	INIT_PROT_LIST_HEAD(ima_measurements_pool,
+			    ima_measurements_ptr);
+	pr_info("next: %p   prev: %p",
+		ima_measurements_ptr->next, ima_measurements_ptr->prev);
+	return 0;
+}
+postcore_initcall(init_ima_measurements);

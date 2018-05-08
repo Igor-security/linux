@@ -40,8 +40,11 @@
 
 #define PMALLOC_REFILL_DEFAULT (0)
 #define PMALLOC_ALIGN_DEFAULT ARCH_KMALLOC_MINALIGN
-#define PMALLOC_RO 0
-#define PMALLOC_RW 1
+#define PMALLOC_RO		0x00
+#define PMALLOC_RW		0x01
+#define PMALLOC_START_RW	0x02
+#define PMALLOC_SHIFT_RW	0x04
+#define PMALLOC_SHIFT_RW_RO	0x08
 
 struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
 						bool rewritable,
