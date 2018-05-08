@@ -116,7 +116,7 @@ void *pmalloc(struct pmalloc_pool *pool, size_t size)
 	mutex_lock(&pool->mutex);
 	if (unlikely(space_needed(pool, size)) &&
 	    unlikely(grow(pool, size)))
-			goto out;
+		goto out;
 	retval = reserve_mem(pool, size);
 out:
 	mutex_unlock(&pool->mutex);

@@ -40,8 +40,11 @@
 
 #define PMALLOC_REFILL_DEFAULT (0)
 #define PMALLOC_ALIGN_DEFAULT ARCH_KMALLOC_MINALIGN
-#define PMALLOC_RO 0
-#define PMALLOC_RW 1
+#define PMALLOC_RO		0x00
+#define PMALLOC_RW		0x01
+#define PMALLOC_START_RW	0x02
+#define PMALLOC_SHIFT_RW	0x04
+#define PMALLOC_SHIFT_RW_RO	0x08
 
 struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
 						bool rewritable,
@@ -49,7 +52,7 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
 
 /**
  * pmalloc_create_pool() - create a protectable memory pool
- * @rewritable: can the data be altered after protection
+ * @flags: if/how can the data be protected and altered
  *
  * Shorthand for pmalloc_create_custom_pool() with default argument:
  * * refill is set to PMALLOC_REFILL_DEFAULT
@@ -59,10 +62,10 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
  * * pointer to the new pool	- success
  * * NULL			- error
  */
-static inline struct pmalloc_pool *pmalloc_create_pool(bool rewritable)
+static inline struct pmalloc_pool *pmalloc_create_pool(unsigned short flags)
 {
 	return pmalloc_create_custom_pool(PMALLOC_REFILL_DEFAULT,
-					  rewritable,
+					  flags,
 					  PMALLOC_ALIGN_DEFAULT);
 }
 

@@ -24,9 +24,13 @@
 #include <linux/module.h>
 #include <linux/rculist.h>
 #include <linux/slab.h>
+#include <linux/prot_list.h>
 #include "ima.h"
 
 #define AUDIT_CAUSE_LEN_MAX 32
+
+static struct pmalloc_pool *ima_measurements_pool;
+static struct list_head *ima_measurements_ptr __ro_after_init;
 
 LIST_HEAD(ima_measurements);	/* list of all measurements */
 #ifdef CONFIG_IMA_KEXEC
@@ -99,7 +103,7 @@ static int ima_add_digest_entry(struct ima_template_entry *entry,
 	struct ima_queue_entry *qe;
 	unsigned int key;
 
-	qe = kmalloc(sizeof(*qe), GFP_KERNEL);
+	qe = pmalloc(ima_measurements_pool, sizeof(*qe));
 	if (qe == NULL) {
 		pr_err("OUT OF MEMORY ERROR creating queue entry\n");
 		return -ENOMEM;
@@ -107,7 +111,7 @@ static int ima_add_digest_entry(struct ima_template_entry *entry,
 	qe->entry = entry;
 
 	INIT_LIST_HEAD(&qe->later);
-	list_add_tail_rcu(&qe->later, &ima_measurements);
+	list_add_tail_rcu(&qe->later, ima_measurements_ptr);
 
 	atomic_long_inc(&ima_htable.len);
 	if (update_htable) {
@@ -212,3 +216,14 @@ int ima_restore_measurement_entry(struct ima_template_entry *entry)
 	mutex_unlock(&ima_extend_list_mutex);
 	return result;
 }
+
+static int __init init_ima_measurements(void)
+{
+	ima_measurements_pool = pmalloc_create_pool(PMALLOC_START_RW |
+						    PMALLOC_SHIFT_RW_RO);
+	ima_measurements_ptr = pmalloc(ima_measurements_pool,
+				       sizeof(struct list_head));
+	INIT_PROT_LIST_HEAD(ima_measurements_pool,
+			    ima_measurements_ptr);
+}
+postcore_initcall(init_ima_measurements);
