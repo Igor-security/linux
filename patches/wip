@@ -1,0 +1,115 @@
+Bottom: 5e375c1c4a1d03a8af4c2bd45b9c11b8f6c9a73b
+Top:    72d6d09cc455fd52f3b006aa54fb8e54dff20dda
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-05-08 13:56:37 +0400
+
+wip
+
+
+---
+
+diff --git a/include/linux/pmalloc.h b/include/linux/pmalloc.h
+index 0aab95074aa8..07bdbedf52db 100644
+--- a/include/linux/pmalloc.h
++++ b/include/linux/pmalloc.h
+@@ -40,8 +40,11 @@
+ 
+ #define PMALLOC_REFILL_DEFAULT (0)
+ #define PMALLOC_ALIGN_DEFAULT ARCH_KMALLOC_MINALIGN
+-#define PMALLOC_RO 0
+-#define PMALLOC_RW 1
++#define PMALLOC_RO		0x00
++#define PMALLOC_RW		0x01
++#define PMALLOC_START_RW	0x02
++#define PMALLOC_SHIFT_RW	0x04
++#define PMALLOC_SHIFT_RW_RO	0x08
+ 
+ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
+ 						bool rewritable,
+@@ -49,7 +52,7 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
+ 
+ /**
+  * pmalloc_create_pool() - create a protectable memory pool
+- * @rewritable: can the data be altered after protection
++ * @flags: if/how can the data be protected and altered
+  *
+  * Shorthand for pmalloc_create_custom_pool() with default argument:
+  * * refill is set to PMALLOC_REFILL_DEFAULT
+@@ -59,10 +62,10 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
+  * * pointer to the new pool	- success
+  * * NULL			- error
+  */
+-static inline struct pmalloc_pool *pmalloc_create_pool(bool rewritable)
++static inline struct pmalloc_pool *pmalloc_create_pool(unsigned short flags)
+ {
+ 	return pmalloc_create_custom_pool(PMALLOC_REFILL_DEFAULT,
+-					  rewritable,
++					  flags,
+ 					  PMALLOC_ALIGN_DEFAULT);
+ }
+ 
+diff --git a/mm/pmalloc.c b/mm/pmalloc.c
+index ca7f10b50b25..12eb1b370735 100644
+--- a/mm/pmalloc.c
++++ b/mm/pmalloc.c
+@@ -116,7 +116,7 @@ void *pmalloc(struct pmalloc_pool *pool, size_t size)
+ 	mutex_lock(&pool->mutex);
+ 	if (unlikely(space_needed(pool, size)) &&
+ 	    unlikely(grow(pool, size)))
+-			goto out;
++		goto out;
+ 	retval = reserve_mem(pool, size);
+ out:
+ 	mutex_unlock(&pool->mutex);
+diff --git a/security/integrity/ima/ima_queue.c b/security/integrity/ima/ima_queue.c
+index 418f35e38015..6f2cc5a16102 100644
+--- a/security/integrity/ima/ima_queue.c
++++ b/security/integrity/ima/ima_queue.c
+@@ -24,10 +24,14 @@
+ #include <linux/module.h>
+ #include <linux/rculist.h>
+ #include <linux/slab.h>
++#include <linux/prot_list.h>
+ #include "ima.h"
+ 
+ #define AUDIT_CAUSE_LEN_MAX 32
+ 
++static struct pmalloc_pool *ima_measurements_pool;
++static struct list_head *ima_measurements_ptr __ro_after_init;
++
+ LIST_HEAD(ima_measurements);	/* list of all measurements */
+ #ifdef CONFIG_IMA_KEXEC
+ static unsigned long binary_runtime_size;
+@@ -99,7 +103,7 @@ static int ima_add_digest_entry(struct ima_template_entry *entry,
+ 	struct ima_queue_entry *qe;
+ 	unsigned int key;
+ 
+-	qe = kmalloc(sizeof(*qe), GFP_KERNEL);
++	qe = pmalloc(ima_measurements_pool, sizeof(*qe));
+ 	if (qe == NULL) {
+ 		pr_err("OUT OF MEMORY ERROR creating queue entry\n");
+ 		return -ENOMEM;
+@@ -107,7 +111,7 @@ static int ima_add_digest_entry(struct ima_template_entry *entry,
+ 	qe->entry = entry;
+ 
+ 	INIT_LIST_HEAD(&qe->later);
+-	list_add_tail_rcu(&qe->later, &ima_measurements);
++	list_add_tail_rcu(&qe->later, ima_measurements_ptr);
+ 
+ 	atomic_long_inc(&ima_htable.len);
+ 	if (update_htable) {
+@@ -212,3 +216,14 @@ int ima_restore_measurement_entry(struct ima_template_entry *entry)
+ 	mutex_unlock(&ima_extend_list_mutex);
+ 	return result;
+ }
++
++static int __init init_ima_measurements(void)
++{
++	ima_measurements_pool = pmalloc_create_pool(PMALLOC_START_RW |
++						    PMALLOC_SHIFT_RW_RO);
++	ima_measurements_ptr = pmalloc(ima_measurements_pool,
++				       sizeof(struct list_head));
++	INIT_PROT_LIST_HEAD(ima_measurements_pool,
++			    ima_measurements_ptr);
++}
++postcore_initcall(init_ima_measurements);
