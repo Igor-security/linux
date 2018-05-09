@@ -34,9 +34,9 @@ static DEFINE_MUTEX(pools_mutex);
  * @refill: the minimum size to allocate when in need of more memory.
  *          It will be rounded up to a multiple of PAGE_SIZE
  *          The value of 0 gives the default amount of PAGE_SIZE.
- * @rewritable: can the data be altered after protection
  * @align_order: log2 of the alignment to use when allocating memory
  *               Negative values give ARCH_KMALLOC_MINALIGN
+ * @mode: what sort of protection to provide to the pool, and when.
  *
  * Creates a new (empty) memory pool for allocation of protectable
  * memory. Memory will be allocated upon request (through pmalloc).
@@ -46,8 +46,8 @@ static DEFINE_MUTEX(pools_mutex);
  * * NULL			- error
  */
 struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
-						bool rewritable,
-						unsigned short align_order)
+						unsigned short align_order,
+						unsigned short mode)
 {
 	struct pmalloc_pool *pool;
 
@@ -56,7 +56,7 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
 		return NULL;
 
 	pool->refill = refill ? PAGE_ALIGN(refill) : DEFAULT_REFILL_SIZE;
-	pool->rewritable = rewritable;
+	pool->mode = mode;
 	pool->align = 1UL << align_order;
 	mutex_init(&pool->mutex);
 
@@ -80,7 +80,7 @@ static int grow(struct pmalloc_pool *pool, size_t min_size)
 		return -ENOMEM;
 
 	area = find_vmap_area((unsigned long)addr);
-	tag_area(area, pool->rewritable);
+	tag_area(area, pool->mode & PMALLOC_RW);
 	pool->offset = get_area_pages_size(area);
 	llist_add(&area->area_list, &pool->vm_areas);
 	return 0;
@@ -193,7 +193,7 @@ bool pmalloc_rare_write(struct pmalloc_pool *pool, const void *destination,
 	 * that are not supposed to be modifiable.
 	 */
 	mutex_lock(&pool->mutex);
-	if (WARN(pool->rewritable != PMALLOC_RW,
+	if (WARN((pool->mode & (PMALLOC_RW & PMALLOC_RO)) != PMALLOC_RW,
 		 "Attempting to modify non rewritable pool"))
 		goto out;
 	area = pool_get_area(pool, destination, n_bytes);
@@ -222,7 +222,7 @@ void pmalloc_make_pool_ro(struct pmalloc_pool *pool)
 	struct vmap_area *area;
 
 	mutex_lock(&pool->mutex);
-	pool->rewritable = false;
+	pool->mode = PMALLOC_RO;
 	llist_for_each_entry(area, pool->vm_areas.first, area_list)
 		protect_area(area);
 	mutex_unlock(&pool->mutex);

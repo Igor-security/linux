@@ -26,7 +26,7 @@ struct pmalloc_pool {
 	size_t refill;
 	size_t offset;
 	size_t align;
-	bool rewritable;
+	unsigned short mode;
 };
 
 #define VM_PMALLOC_PROTECTED_MASK (VM_PMALLOC | VM_PMALLOC_PROTECTED)
@@ -42,9 +42,9 @@ static __always_inline unsigned long area_flags(struct vmap_area *area)
 	return area->vm->flags & VM_PMALLOC_MASK;
 }
 
-static __always_inline void tag_area(struct vmap_area *area, bool rewritable)
+static __always_inline void tag_area(struct vmap_area *area, unsigned short mode)
 {
-	if (rewritable == PMALLOC_RW)
+	if (mode & PMALLOC_RW)
 		area->vm->flags |= VM_PMALLOC_REWRITABLE_MASK;
 	else
 		area->vm->flags |= VM_PMALLOC;
