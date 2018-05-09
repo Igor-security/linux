@@ -47,12 +47,12 @@
 #define PMALLOC_SHIFT_RW_RO	0x08
 
 struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
-						bool rewritable,
-						unsigned short align_order);
+						unsigned short align_order,
+						bool mode);
 
 /**
  * pmalloc_create_pool() - create a protectable memory pool
- * @rewritable: can the data be altered after protection
+ * @mode: can the data be altered after protection
  *
  * Shorthand for pmalloc_create_custom_pool() with default argument:
  * * refill is set to PMALLOC_REFILL_DEFAULT
@@ -62,11 +62,11 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
  * * pointer to the new pool	- success
  * * NULL			- error
  */
-static inline struct pmalloc_pool *pmalloc_create_pool(bool rewritable)
+static inline struct pmalloc_pool *pmalloc_create_pool(bool mode)
 {
 	return pmalloc_create_custom_pool(PMALLOC_REFILL_DEFAULT,
-					  rewritable,
-					  PMALLOC_ALIGN_DEFAULT);
+					  PMALLOC_ALIGN_DEFAULT,
+					  mode);
 }
 
 
