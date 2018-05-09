@@ -1,8 +1,7 @@
 Version: 1
-Previous: bedce166741e55cf838f1b67bab7670374d7e7be
+Previous: fce25acb8b3def047d82085e7d4f648855762bd7
 Head: 2168a696ad66840aaa1bdee357c7fe75d2f0b6d8
 Applied:
-  rewritable-mode: 2168a696ad66840aaa1bdee357c7fe75d2f0b6d8
 Unapplied:
   booooom: 4ebcc59a7e9c5807fbe275c30ab797684396630b
   wip: 544a3e4323a47aeb0371c06fdf6f433d18b1e8d7
