@@ -8,11 +8,10 @@
 
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/pmalloc.h>
 #include <linux/mm.h>
 #include <linux/bug.h>
-
-#include "pmalloc_helpers.h"
+#include <linux/pmalloc.h>
+#include <linux/prot_list.h>
 
 #define SIZE_1 (PAGE_SIZE * 3)
 #define SIZE_2 1000
@@ -179,6 +178,60 @@ static int test_rare_write(void)
 	return 0;
 }
 
+struct test_data {
+	int data_int;
+	struct prot_head list;
+	unsigned long long data_ulong;
+};
+
+static int test_prot_list(void)
+{
+	struct prot_list_pool *pool;
+	struct prot_head *head;
+	struct prot_head *cursor;
+	struct test_data data;
+	int i;
+
+	/* Create a pool for the protectable list. */
+	pool = prot_list_create_pool();
+	if (WARN(!pool, "could not create pool"))
+		return -ENOMEM;
+
+	head = PROT_LIST_HEAD(pool);
+	pr_info("head: 0x%08lx   head->next: 0x%08lx  head->prev: 0x%08lx",
+		(unsigned long)head, (unsigned long)head->next,
+		(unsigned long)head->prev);
+	for (i = 0; i < 10; i++) {
+		data.data_int = i;
+		data.data_ulong = i * i;
+		if (i % 2)
+			prot_list_append(pool, head, &data, list);
+		else
+			prot_list_prepend(pool, head, &data, list);
+	}
+	pr_info("head: 0x%08lx   head->next: 0x%08lx  head->prev: 0x%08lx",
+		(unsigned long)head, (unsigned long)head->next,
+		(unsigned long)head->prev);
+	for (cursor = head->next; cursor != head; cursor = cursor->next) {
+		struct test_data *data;
+
+		data = container_of(cursor, struct test_data, list);
+
+		pr_info("cursor: 0x%08lx  data_int: %d ",
+			(unsigned long)cursor, data->data_int);
+	}
+	for (cursor = head->prev; cursor != head; cursor = cursor->prev) {
+		struct test_data *data;
+
+		data = container_of(cursor, struct test_data, list);
+
+		pr_info("cursor: 0x%08lx  data_int: %d ",
+			(unsigned long)cursor, data->data_int);
+	}
+
+	return 0;
+}
+
 /**
  * test_pmalloc()  -main entry point for running the test cases
  */
@@ -192,6 +245,7 @@ static int __init test_pmalloc_init_module(void)
 		       test_is_pmalloc_object())))
 		return -1;
 	test_rare_write();
+	test_prot_list();
 	return 0;
 }
 
