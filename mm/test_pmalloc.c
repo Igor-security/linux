@@ -8,11 +8,10 @@
 
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/pmalloc.h>
 #include <linux/mm.h>
 #include <linux/bug.h>
-
-#include "pmalloc_helpers.h"
+#include <linux/pmalloc.h>
+#include <linux/prot_list.h>
 
 #define SIZE_1 (PAGE_SIZE * 3)
 #define SIZE_2 1000
@@ -179,6 +178,80 @@ static int test_rare_write(void)
 	return 0;
 }
 
+#include <linux/sched.h>
+#include <linux/thread_info.h>
+
+static int victim __rare_write_after_init = 23;
+#include <linux/rare_write.h>
+
+
+int test_static_rare_write(void)
+{
+	int src = 11;
+
+	pr_notice("QQQQQQ Victim is %d", victim);
+	rare_write(&victim, &src);
+	pr_info("QQQQQQ start: 0x%016lx", (unsigned long)&__start_rare_write_after_init);
+	pr_info("QQQQQQ victim: 0x%016lx", (unsigned long)&victim);
+	pr_info("QQQQQQ end: 0x%016lx", (unsigned long)&__end_rare_write_after_init);
+	pr_notice("QQQQQQ Victim is %d", victim);
+}
+EXPORT_SYMBOL(test_static_rare_write);
+
+struct test_data {
+	int data_int;
+	struct prot_head list;
+	unsigned long long data_ulong;
+};
+
+static int test_prot_list(void)
+{
+	struct prot_list_pool *pool;
+	struct prot_head *head;
+	struct prot_head *cursor;
+	struct test_data data;
+	int i;
+
+	/* Create a pool for the protectable list. */
+	pool = prot_list_create_pool();
+	if (WARN(!pool, "could not create pool"))
+		return -ENOMEM;
+
+	head = PROT_LIST_HEAD(pool);
+	for (i = 0; i < 100; i++) {
+		data.data_int = i;
+		data.data_ulong = i * i;
+		if (i % 2)
+			prot_list_append(pool, head, &data, list);
+		else
+			prot_list_prepend(pool, head, &data, list);
+	}
+	for (cursor = head->next; cursor != head; cursor = cursor->next) {
+		struct test_data *data;
+
+		data = container_of(cursor, struct test_data, list);
+
+		pr_info("cursor: 0x%08lx  data_int: %02d ",
+			(unsigned long)cursor, data->data_int);
+	}
+/*	{
+		struct test_data *data;
+
+		data = container_of(cursor->next, struct test_data, list);
+		data->data_int += 5;
+	}*/
+	for (cursor = head->prev; cursor != head; cursor = cursor->prev) {
+		struct test_data *data;
+
+		data = container_of(cursor, struct test_data, list);
+
+		pr_info("cursor: 0x%08lx  data_int: %02d ",
+			(unsigned long)cursor, data->data_int);
+	}
+
+	return 0;
+}
+
 /**
  * test_pmalloc()  -main entry point for running the test cases
  */
@@ -192,6 +265,8 @@ static int __init test_pmalloc_init_module(void)
 		       test_is_pmalloc_object())))
 		return -1;
 	test_rare_write();
+	test_prot_list();
+//	test_static_rare_write();
 	return 0;
 }
 
