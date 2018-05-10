@@ -8,11 +8,10 @@
 
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/pmalloc.h>
 #include <linux/mm.h>
 #include <linux/bug.h>
-
-#include "pmalloc_helpers.h"
+#include <linux/pmalloc.h>
+#include <linux/prot_list.h>
 
 #define SIZE_1 (PAGE_SIZE * 3)
 #define SIZE_2 1000
@@ -179,6 +178,24 @@ static int test_rare_write(void)
 	return 0;
 }
 
+
+static int test_prot_list(void)
+{
+	struct prot_list_pool *pool;
+	struct prot_head *head;
+
+	pool = prot_list_create_pool();
+	if (WARN(!pool, "could not create pool"))
+		return -ENOMEM;
+
+	head = PROT_LIST_HEAD(pool);
+	pr_info("QQQQQ "
+		"head: 0x%08lx   head->next: 0x%08lx  head->prev: 0x%08lx",
+		(unsigned long)head, (unsigned long)head->next,
+		(unsigned long)head->prev);
+	return 0;
+}
+
 /**
  * test_pmalloc()  -main entry point for running the test cases
  */
@@ -192,6 +209,7 @@ static int __init test_pmalloc_init_module(void)
 		       test_is_pmalloc_object())))
 		return -1;
 	test_rare_write();
+	test_prot_list();
 	return 0;
 }
 

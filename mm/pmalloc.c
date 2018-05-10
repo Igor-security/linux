@@ -21,7 +21,6 @@
 #include <asm/page.h>
 
 #include <linux/pmalloc.h>
-#include "pmalloc_helpers.h"
 
 static LIST_HEAD(pools_list);
 static DEFINE_MUTEX(pools_mutex);
@@ -30,13 +29,39 @@ static DEFINE_MUTEX(pools_mutex);
 #define DEFAULT_REFILL_SIZE PAGE_SIZE
 
 /**
+ * pmalloc_init_custom_pool() - initialize a protectable memory pool
+ * @pool: the pointer to the struct pmalloc_pool to initialize
+ * @refill: the minimum size to allocate when in need of more memory.
+ *          It will be rounded up to a multiple of PAGE_SIZE
+ *          The value of 0 gives the default amount of PAGE_SIZE.
+ * @align_order: log2 of the alignment to use when allocating memory
+ *               Negative values give ARCH_KMALLOC_MINALIGN
+ * @mode: can the data be altered after protection
+ *
+ * Initializes an empty memory pool, for allocation of protectable
+ * memory. Memory will be allocated upon request (through pmalloc).
+ */
+void pmalloc_init_custom_pool(struct pmalloc_pool *pool, size_t refill,
+			      unsigned short align_order, bool mode)
+{
+	pool->refill = refill ? PAGE_ALIGN(refill) : DEFAULT_REFILL_SIZE;
+	pool->mode = mode;
+	pool->align = 1UL << align_order;
+	mutex_init(&pool->mutex);
+	mutex_lock(&pools_mutex);
+	list_add(&pool->pool_node, &pools_list);
+	mutex_unlock(&pools_mutex);
+}
+EXPORT_SYMBOL(pmalloc_init_custom_pool);
+
+/**
  * pmalloc_create_custom_pool() - create a new protectable memory pool
  * @refill: the minimum size to allocate when in need of more memory.
  *          It will be rounded up to a multiple of PAGE_SIZE
  *          The value of 0 gives the default amount of PAGE_SIZE.
- * @rewritable: can the data be altered after protection
  * @align_order: log2 of the alignment to use when allocating memory
  *               Negative values give ARCH_KMALLOC_MINALIGN
+ * @mode: can the data be altered after protection
  *
  * Creates a new (empty) memory pool for allocation of protectable
  * memory. Memory will be allocated upon request (through pmalloc).
@@ -46,23 +71,15 @@ static DEFINE_MUTEX(pools_mutex);
  * * NULL			- error
  */
 struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
-						bool rewritable,
-						unsigned short align_order)
+						unsigned short align_order,
+						bool mode)
 {
 	struct pmalloc_pool *pool;
 
 	pool = kzalloc(sizeof(struct pmalloc_pool), GFP_KERNEL);
 	if (WARN(!pool, "Could not allocate pool meta data."))
 		return NULL;
-
-	pool->refill = refill ? PAGE_ALIGN(refill) : DEFAULT_REFILL_SIZE;
-	pool->rewritable = rewritable;
-	pool->align = 1UL << align_order;
-	mutex_init(&pool->mutex);
-
-	mutex_lock(&pools_mutex);
-	list_add(&pool->pool_node, &pools_list);
-	mutex_unlock(&pools_mutex);
+	pmalloc_init_custom_pool(pool, refill, align_order, mode);
 	return pool;
 }
 EXPORT_SYMBOL(pmalloc_create_custom_pool);
@@ -80,8 +97,8 @@ static int grow(struct pmalloc_pool *pool, size_t min_size)
 		return -ENOMEM;
 
 	area = find_vmap_area((unsigned long)addr);
-	tag_area(area, pool->rewritable);
-	pool->offset = get_area_pages_size(area);
+	__tag_area(area, pool->mode);
+	pool->offset = __get_area_pages_size(area);
 	llist_add(&area->area_list, &pool->vm_areas);
 	return 0;
 }
@@ -89,8 +106,7 @@ static int grow(struct pmalloc_pool *pool, size_t min_size)
 static void *reserve_mem(struct pmalloc_pool *pool, size_t size)
 {
 	pool->offset = round_down(pool->offset - size, pool->align);
-	return (void *)(current_area(pool)->va_start + pool->offset);
-
+	return (void *)(__current_area(pool)->va_start + pool->offset);
 }
 
 /**
@@ -114,7 +130,7 @@ void *pmalloc(struct pmalloc_pool *pool, size_t size)
 	void *retval = NULL;
 
 	mutex_lock(&pool->mutex);
-	if (unlikely(space_needed(pool, size)) &&
+	if (unlikely(__space_needed(pool, size)) &&
 	    unlikely(grow(pool, size)))
 			goto out;
 	retval = reserve_mem(pool, size);
@@ -142,73 +158,11 @@ void pmalloc_protect_pool(struct pmalloc_pool *pool)
 
 	mutex_lock(&pool->mutex);
 	llist_for_each_entry(area, pool->vm_areas.first, area_list)
-		protect_area(area);
+		__protect_area(area);
 	mutex_unlock(&pool->mutex);
 }
 EXPORT_SYMBOL(pmalloc_protect_pool);
 
-static inline bool rare_write(const void *destination,
-			      const void *source, size_t n_bytes)
-{
-	struct page *page;
-	void *base;
-	size_t size;
-	unsigned long offset;
-
-	while (n_bytes) {
-		page = vmalloc_to_page(destination);
-		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
-		if (WARN(!base, "failed to remap rewritable page"))
-			return false;
-		offset = (unsigned long)destination & ~PAGE_MASK;
-		size = min(n_bytes, (size_t)PAGE_SIZE - offset);
-		memcpy(base + offset, source, size);
-		vunmap(base);
-		destination += size;
-		source += size;
-		n_bytes -= size;
-	}
-}
-
-/**
- * pmalloc_rare_write() - alters the content of a rewritable pool
- * @pool: the pool associated to the memory to write-protect
- * @destination: where to write the new data
- * @source: the location of the data to replicate into the pool
- * @n_bytes: the size of the region to modify
- *
- * Return:
- * * true	- success
- * * false	- error
- */
-bool pmalloc_rare_write(struct pmalloc_pool *pool, const void *destination,
-			const void *source, size_t n_bytes)
-{
-	bool retval = false;
-	struct vmap_area *area;
-
-	/*
-	 * The following sanitation is meant to make life harder for
-	 * attempts at using ROP/JOP to call this function against pools
-	 * that are not supposed to be modifiable.
-	 */
-	mutex_lock(&pool->mutex);
-	if (WARN(pool->rewritable != PMALLOC_RW,
-		 "Attempting to modify non rewritable pool"))
-		goto out;
-	area = pool_get_area(pool, destination, n_bytes);
-	if (WARN(!area, "Destination range not in pool"))
-		goto out;
-	if (WARN(!is_area_rewritable(area),
-		 "Attempting to modify non rewritable area"))
-		goto out;
-	rare_write(destination, source, n_bytes);
-	retval = true;
-out:
-	mutex_unlock(&pool->mutex);
-	return retval;
-}
-EXPORT_SYMBOL(pmalloc_rare_write);
 
 /**
  * pmalloc_make_pool_ro() - drops rare-write permission from a pool
@@ -222,9 +176,9 @@ void pmalloc_make_pool_ro(struct pmalloc_pool *pool)
 	struct vmap_area *area;
 
 	mutex_lock(&pool->mutex);
-	pool->rewritable = false;
+	pool->mode = false;
 	llist_for_each_entry(area, pool->vm_areas.first, area_list)
-		protect_area(area);
+		__protect_area(area);
 	mutex_unlock(&pool->mutex);
 }
 EXPORT_SYMBOL(pmalloc_make_pool_ro);
@@ -252,7 +206,7 @@ void pmalloc_destroy_pool(struct pmalloc_pool *pool)
 		tmp = cursor;
 		cursor = cursor->next;
 		area = llist_entry(tmp, struct vmap_area, area_list);
-		destroy_area(area);
+		__destroy_area(area);
 	}
 }
 EXPORT_SYMBOL(pmalloc_destroy_pool);
