@@ -26,7 +26,6 @@
 #include <linux/sched/clock.h>
 #include <asm/sections.h>
 
-#include "pmalloc_helpers.h"
 
 /*
  * Checks if a given pointer and length is contained by the current
