@@ -84,7 +84,6 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
 }
 EXPORT_SYMBOL(pmalloc_create_custom_pool);
 
-
 static int grow(struct pmalloc_pool *pool, size_t min_size)
 {
 	void *addr;

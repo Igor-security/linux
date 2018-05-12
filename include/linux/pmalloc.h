@@ -26,7 +26,6 @@ void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
 
 #else
 
-
 /*
  * Library for dynamic allocation of pools of protectable memory.
  * A pool is a single linked list of vmap_area structures.
@@ -258,7 +257,6 @@ struct vmap_area *__pool_get_area(struct pmalloc_pool *pool,
  * Any addition/modification to the rare-write path must follow the same
  * approach.
  */
-
 void __noreturn usercopy_abort(const char *name, const char *detail,
 			       bool to_user, unsigned long offset,
 			       unsigned long len);
@@ -270,6 +268,10 @@ void __noreturn usercopy_abort(const char *name, const char *detail,
  * @to_user: copy to userspace or from userspace
  *
  * If the check is ok, it will fall-through, otherwise it will abort.
+ * The function is inlined, to minimize the performance impact of the
+ * extra check to perform on a typically hot path.
+ * Micro benchmarking with QEMU shows a reduction of the time spent in this
+ * fragment by 60%, when inlined.
  */
 static inline
 void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
@@ -280,12 +282,12 @@ void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
 	if (unlikely(retv)) {
 		if (unlikely(!to_user))
 			usercopy_abort("pmalloc",
-				       "trying to write to pmalloc object",
-				       to_user, (const unsigned long)ptr, n);
+				       "writing to pmalloc object", to_user,
+				       (const unsigned long)ptr, n);
 		if (retv < 0)
 			usercopy_abort("pmalloc",
-				       "invalid pmalloc object",
-				       to_user, (const unsigned long)ptr, n);
+				       "invalid pmalloc object", to_user,
+				       (const unsigned long)ptr, n);
 	}
 }
 
@@ -408,29 +410,6 @@ static inline char *pstrdup(struct pmalloc_pool *pool, const char *s)
 	return buf;
 }
 
-static __always_inline
-bool __rare_write(const void *destination, const void *source, size_t n_bytes)
-{
-	struct page *page;
-	void *base;
-	size_t size;
-	unsigned long offset;
-
-	while (n_bytes) {
-		page = vmalloc_to_page(destination);
-		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
-		if (WARN(!base, "failed to remap rewritable page"))
-			return false;
-		offset = (unsigned long)destination & ~PAGE_MASK;
-		size = min(n_bytes, ((size_t)PAGE_SIZE - offset));
-		memcpy(base + offset, source, size);
-		vunmap(base);
-		destination += size;
-		source += size;
-		n_bytes -= size;
-	}
-}
-
 /**
  * pmalloc_rare_write() - alters the content of a rewritable pool
  * @pool: the pool associated to the memory to write-protect
@@ -448,28 +427,42 @@ bool pmalloc_rare_write(struct pmalloc_pool *pool, const void *destination,
 {
 	bool retval = false;
 	struct vmap_area *area;
+	struct page *page;
+	void *base;
+	size_t size;
+	unsigned long offset;
 
 	/*
 	 * The following sanitation is meant to make life harder for
-	 * attempts at using ROP/JOP to call this function against pools
+	 * attempts at using ROP/JOP to call this function against areas
 	 * that are not supposed to be modifiable.
 	 */
 	mutex_lock(&pool->mutex);
-	if (WARN(pool->mode != PMALLOC_RW,
-		 "Attempting to modify non rewritable pool"))
-		goto out;
 	area = __pool_get_area(pool, destination, n_bytes);
 	if (WARN(!area, "Destination range not in pool"))
 		goto out;
 	if (WARN(!__is_area_rewritable(area),
 		 "Attempting to modify non rewritable area"))
 		goto out;
-	__rare_write(destination, source, n_bytes);
+	while (n_bytes) {
+		page = vmalloc_to_page(destination);
+		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
+		if (WARN(!base, "failed to remap rewritable page"))
+			goto out;
+		offset = (unsigned long)destination & ~PAGE_MASK;
+		size = min(n_bytes, ((size_t)PAGE_SIZE - offset));
+		memcpy(base + offset, source, size);
+		vunmap(base);
+		destination += size;
+		source += size;
+		n_bytes -= size;
+	}
 	retval = true;
 out:
 	mutex_unlock(&pool->mutex);
 	return retval;
 }
+
 void pmalloc_protect_pool(struct pmalloc_pool *pool);
 
 void pmalloc_make_pool_ro(struct pmalloc_pool *pool);
