@@ -77,17 +77,6 @@ void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
 #define PMALLOC_AUTO_RO		(PMALLOC_RO | PMALLOC_AUTO)
 #define PMALLOC_AUTO_RW		(PMALLOC_RW | PMALLOC_AUTO)
 
-
-struct pmalloc_pool {
-	struct mutex mutex;
-	struct list_head pool_node;
-	struct llist_head vm_areas;
-	size_t refill;
-	size_t offset;
-	size_t align;
-	bool mode;
-};
-
 #define VM_PMALLOC_PROTECTED_MASK (VM_PMALLOC | VM_PMALLOC_PROTECTED)
 #define VM_PMALLOC_REWRITABLE_MASK \
 	(VM_PMALLOC | VM_PMALLOC_REWRITABLE)
@@ -97,23 +86,37 @@ struct pmalloc_pool {
 	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
 
 
+struct pmalloc_pool {
+	struct mutex mutex;
+	struct list_head pool_node;
+	struct llist_head vm_areas;
+	size_t refill;
+	size_t offset;
+	size_t align;
+	uint8_t mode;
+};
+
 /*
  * Helper functions, not part of the API.
  * They are implemented as inlined functions, instead of macros, for
  * additional type-checking, however they are not meant to be called
- * directly by pmalloc users.
+ * directly by typical pmalloc users.
+ * However, they might be useful for implementing the plumbing of data
+ * structures using protectable memory.
  */
 static __always_inline unsigned long __area_flags(struct vmap_area *area)
 {
 	return area->vm->flags & VM_PMALLOC_MASK;
 }
 
-static __always_inline void __tag_area(struct vmap_area *area, bool mode)
+static __always_inline void __tag_area(struct vmap_area *area, uint8_t mode)
 {
-	if (mode == PMALLOC_RW)
-		area->vm->flags |= VM_PMALLOC_REWRITABLE_MASK;
-	else
+	if (!(mode & PMALLOC_RW))
 		area->vm->flags |= VM_PMALLOC;
+	else if (mode & PMALLOC_AUTO)
+		area->vm->flags |= VM_PMALLOC_PROTECTED_REWRITABLE_MASK;
+	else
+		area->vm->flags |= VM_PMALLOC_REWRITABLE_MASK;
 }
 
 static __always_inline void __untag_area(struct vmap_area *area)
@@ -182,6 +185,15 @@ static __always_inline bool __protected(struct pmalloc_pool *pool)
 	return __is_area_protected(__current_area(pool));
 }
 
+static __always_inline bool __writable(struct pmalloc_pool *pool)
+{
+	struct vmap_area *area;
+
+	area = container_of(pool->vm_areas->next, struct vmap_area,
+			    area_list);
+	return 
+}
+
 static inline bool __exhausted(struct pmalloc_pool *pool, size_t size)
 {
 	size_t space_before;
@@ -192,10 +204,16 @@ static inline bool __exhausted(struct pmalloc_pool *pool, size_t size)
 	return unlikely(space_after < size && space_before < size);
 }
 
+static inline bool __unwritable(struct pmalloc_pool)
+{
+	return 
+}
+
 static __always_inline
 bool __space_needed(struct pmalloc_pool *pool, size_t size)
 {
-	return __empty(pool) || __protected(pool) || __exhausted(pool, size);
+	return __empty(pool) || __exhausted(pool, size) ||
+		__unwritable(pool);
 }
 
 static __always_inline size_t __get_area_pages_size(struct vmap_area *area)
@@ -290,15 +308,15 @@ void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
 }
 
 void pmalloc_init_custom_pool(struct pmalloc_pool *pool, size_t refill,
-			      unsigned short align_order, bool mode);
+			      unsigned short align_order, uint8_t mode);
 
 struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
 						unsigned short align_order,
-						bool mode);
+						uint8_t mode);
 
 /**
  * pmalloc_create_pool() - create a protectable memory pool
- * @mode: can the data be altered after protection
+ * @mode: properties of the memory allocated
  *
  * Shorthand for pmalloc_create_custom_pool() with default argument:
  * * refill is set to PMALLOC_REFILL_DEFAULT
@@ -308,7 +326,7 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
  * * pointer to the new pool	- success
  * * NULL			- error
  */
-static inline struct pmalloc_pool *pmalloc_create_pool(bool mode)
+static inline struct pmalloc_pool *pmalloc_create_pool(uint8_t mode)
 {
 	return pmalloc_create_custom_pool(PMALLOC_REFILL_DEFAULT,
 					  PMALLOC_ALIGN_DEFAULT,

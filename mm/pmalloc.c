@@ -36,13 +36,13 @@ static DEFINE_MUTEX(pools_mutex);
  *          The value of 0 gives the default amount of PAGE_SIZE.
  * @align_order: log2 of the alignment to use when allocating memory
  *               Negative values give ARCH_KMALLOC_MINALIGN
- * @mode: can the data be altered after protection
+ * @mode: properties of the memory allocated
  *
  * Initializes an empty memory pool, for allocation of protectable
  * memory. Memory will be allocated upon request (through pmalloc).
  */
 void pmalloc_init_custom_pool(struct pmalloc_pool *pool, size_t refill,
-			      unsigned short align_order, bool mode)
+			      unsigned short align_order, uint8_t mode)
 {
 	pool->refill = refill ? PAGE_ALIGN(refill) : DEFAULT_REFILL_SIZE;
 	pool->mode = mode;
@@ -61,7 +61,7 @@ EXPORT_SYMBOL(pmalloc_init_custom_pool);
  *          The value of 0 gives the default amount of PAGE_SIZE.
  * @align_order: log2 of the alignment to use when allocating memory
  *               Negative values give ARCH_KMALLOC_MINALIGN
- * @mode: can the data be altered after protection
+ * @mode: properties of the memory allocated
  *
  * Creates a new (empty) memory pool for allocation of protectable
  * memory. Memory will be allocated upon request (through pmalloc).
@@ -72,7 +72,7 @@ EXPORT_SYMBOL(pmalloc_init_custom_pool);
  */
 struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
 						unsigned short align_order,
-						bool mode)
+						uint8_t mode)
 {
 	struct pmalloc_pool *pool;
 
@@ -102,12 +102,6 @@ static int grow(struct pmalloc_pool *pool, size_t min_size)
 	return 0;
 }
 
-static void *reserve_mem(struct pmalloc_pool *pool, size_t size)
-{
-	pool->offset = round_down(pool->offset - size, pool->align);
-	return (void *)(__current_area(pool)->va_start + pool->offset);
-}
-
 /**
  * pmalloc() - allocate protectable memory from a pool
  * @pool: handle to the pool to be used for memory allocation
@@ -132,7 +126,8 @@ void *pmalloc(struct pmalloc_pool *pool, size_t size)
 	if (unlikely(__space_needed(pool, size)) &&
 	    unlikely(grow(pool, size)))
 			goto out;
-	retval = reserve_mem(pool, size);
+	pool->offset = round_down(pool->offset - size, pool->align);
+	retval = (void *)(__current_area(pool)->va_start + pool->offset);
 out:
 	mutex_unlock(&pool->mutex);
 	return retval;
@@ -175,7 +170,7 @@ void pmalloc_make_pool_ro(struct pmalloc_pool *pool)
 	struct vmap_area *area;
 
 	mutex_lock(&pool->mutex);
-	pool->mode = false;
+	pool->mode &= ~PMALLOC_RW;
 	llist_for_each_entry(area, pool->vm_areas.first, area_list)
 		__protect_area(area);
 	mutex_unlock(&pool->mutex);
