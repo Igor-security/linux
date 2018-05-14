@@ -1,0 +1,207 @@
+Bottom: 374e7fab93ec02cc2a729da24536da7a38f2caab
+Top:    589f3026618a9fb215fc4c092e3f39880d86e803
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-05-14 23:53:21 +0300
+
+bleah
+
+
+---
+
+diff --git a/include/linux/pmalloc.h b/include/linux/pmalloc.h
+index aff02b0fb7ab..4a16173d06fd 100644
+--- a/include/linux/pmalloc.h
++++ b/include/linux/pmalloc.h
+@@ -77,6 +77,14 @@ void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
+ #define PMALLOC_AUTO_RO		(PMALLOC_RO | PMALLOC_AUTO)
+ #define PMALLOC_AUTO_RW		(PMALLOC_RW | PMALLOC_AUTO)
+ 
++#define VM_PMALLOC_PROTECTED_MASK (VM_PMALLOC | VM_PMALLOC_PROTECTED)
++#define VM_PMALLOC_REWRITABLE_MASK \
++	(VM_PMALLOC | VM_PMALLOC_REWRITABLE)
++#define VM_PMALLOC_PROTECTED_REWRITABLE_MASK \
++	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
++#define VM_PMALLOC_MASK \
++	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
++
+ 
+ struct pmalloc_pool {
+ 	struct mutex mutex;
+@@ -85,35 +93,30 @@ struct pmalloc_pool {
+ 	size_t refill;
+ 	size_t offset;
+ 	size_t align;
+-	bool mode;
++	uint8_t mode;
+ };
+ 
+-#define VM_PMALLOC_PROTECTED_MASK (VM_PMALLOC | VM_PMALLOC_PROTECTED)
+-#define VM_PMALLOC_REWRITABLE_MASK \
+-	(VM_PMALLOC | VM_PMALLOC_REWRITABLE)
+-#define VM_PMALLOC_PROTECTED_REWRITABLE_MASK \
+-	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
+-#define VM_PMALLOC_MASK \
+-	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
+-
+-
+ /*
+  * Helper functions, not part of the API.
+  * They are implemented as inlined functions, instead of macros, for
+  * additional type-checking, however they are not meant to be called
+- * directly by pmalloc users.
++ * directly by typical pmalloc users.
++ * However, they might be useful for implementing the plumbing of data
++ * structures using protectable memory.
+  */
+ static __always_inline unsigned long __area_flags(struct vmap_area *area)
+ {
+ 	return area->vm->flags & VM_PMALLOC_MASK;
+ }
+ 
+-static __always_inline void __tag_area(struct vmap_area *area, bool mode)
++static __always_inline void __tag_area(struct vmap_area *area, uint8_t mode)
+ {
+-	if (mode == PMALLOC_RW)
+-		area->vm->flags |= VM_PMALLOC_REWRITABLE_MASK;
+-	else
++	if (!(mode & PMALLOC_RW))
+ 		area->vm->flags |= VM_PMALLOC;
++	else if (mode & PMALLOC_AUTO)
++		area->vm->flags |= VM_PMALLOC_PROTECTED_REWRITABLE_MASK;
++	else
++		area->vm->flags |= VM_PMALLOC_REWRITABLE_MASK;
+ }
+ 
+ static __always_inline void __untag_area(struct vmap_area *area)
+@@ -182,6 +185,15 @@ static __always_inline bool __protected(struct pmalloc_pool *pool)
+ 	return __is_area_protected(__current_area(pool));
+ }
+ 
++static __always_inline bool __writable(struct pmalloc_pool *pool)
++{
++	struct vmap_area *area;
++
++	area = container_of(pool->vm_areas->next, struct vmap_area,
++			    area_list);
++	return 
++}
++
+ static inline bool __exhausted(struct pmalloc_pool *pool, size_t size)
+ {
+ 	size_t space_before;
+@@ -192,10 +204,16 @@ static inline bool __exhausted(struct pmalloc_pool *pool, size_t size)
+ 	return unlikely(space_after < size && space_before < size);
+ }
+ 
++static inline bool __unwritable(struct pmalloc_pool)
++{
++	return 
++}
++
+ static __always_inline
+ bool __space_needed(struct pmalloc_pool *pool, size_t size)
+ {
+-	return __empty(pool) || __protected(pool) || __exhausted(pool, size);
++	return __empty(pool) || __exhausted(pool, size) ||
++		__unwritable(pool);
+ }
+ 
+ static __always_inline size_t __get_area_pages_size(struct vmap_area *area)
+@@ -290,15 +308,15 @@ void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
+ }
+ 
+ void pmalloc_init_custom_pool(struct pmalloc_pool *pool, size_t refill,
+-			      unsigned short align_order, bool mode);
++			      unsigned short align_order, uint8_t mode);
+ 
+ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
+ 						unsigned short align_order,
+-						bool mode);
++						uint8_t mode);
+ 
+ /**
+  * pmalloc_create_pool() - create a protectable memory pool
+- * @mode: can the data be altered after protection
++ * @mode: properties of the memory allocated
+  *
+  * Shorthand for pmalloc_create_custom_pool() with default argument:
+  * * refill is set to PMALLOC_REFILL_DEFAULT
+@@ -308,7 +326,7 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
+  * * pointer to the new pool	- success
+  * * NULL			- error
+  */
+-static inline struct pmalloc_pool *pmalloc_create_pool(bool mode)
++static inline struct pmalloc_pool *pmalloc_create_pool(uint8_t mode)
+ {
+ 	return pmalloc_create_custom_pool(PMALLOC_REFILL_DEFAULT,
+ 					  PMALLOC_ALIGN_DEFAULT,
+diff --git a/mm/pmalloc.c b/mm/pmalloc.c
+index 9718639112e9..6ef0c8d1b816 100644
+--- a/mm/pmalloc.c
++++ b/mm/pmalloc.c
+@@ -36,13 +36,13 @@ static DEFINE_MUTEX(pools_mutex);
+  *          The value of 0 gives the default amount of PAGE_SIZE.
+  * @align_order: log2 of the alignment to use when allocating memory
+  *               Negative values give ARCH_KMALLOC_MINALIGN
+- * @mode: can the data be altered after protection
++ * @mode: properties of the memory allocated
+  *
+  * Initializes an empty memory pool, for allocation of protectable
+  * memory. Memory will be allocated upon request (through pmalloc).
+  */
+ void pmalloc_init_custom_pool(struct pmalloc_pool *pool, size_t refill,
+-			      unsigned short align_order, bool mode)
++			      unsigned short align_order, uint8_t mode)
+ {
+ 	pool->refill = refill ? PAGE_ALIGN(refill) : DEFAULT_REFILL_SIZE;
+ 	pool->mode = mode;
+@@ -61,7 +61,7 @@ EXPORT_SYMBOL(pmalloc_init_custom_pool);
+  *          The value of 0 gives the default amount of PAGE_SIZE.
+  * @align_order: log2 of the alignment to use when allocating memory
+  *               Negative values give ARCH_KMALLOC_MINALIGN
+- * @mode: can the data be altered after protection
++ * @mode: properties of the memory allocated
+  *
+  * Creates a new (empty) memory pool for allocation of protectable
+  * memory. Memory will be allocated upon request (through pmalloc).
+@@ -72,7 +72,7 @@ EXPORT_SYMBOL(pmalloc_init_custom_pool);
+  */
+ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
+ 						unsigned short align_order,
+-						bool mode)
++						uint8_t mode)
+ {
+ 	struct pmalloc_pool *pool;
+ 
+@@ -102,12 +102,6 @@ static int grow(struct pmalloc_pool *pool, size_t min_size)
+ 	return 0;
+ }
+ 
+-static void *reserve_mem(struct pmalloc_pool *pool, size_t size)
+-{
+-	pool->offset = round_down(pool->offset - size, pool->align);
+-	return (void *)(__current_area(pool)->va_start + pool->offset);
+-}
+-
+ /**
+  * pmalloc() - allocate protectable memory from a pool
+  * @pool: handle to the pool to be used for memory allocation
+@@ -132,7 +126,8 @@ void *pmalloc(struct pmalloc_pool *pool, size_t size)
+ 	if (unlikely(__space_needed(pool, size)) &&
+ 	    unlikely(grow(pool, size)))
+ 			goto out;
+-	retval = reserve_mem(pool, size);
++	pool->offset = round_down(pool->offset - size, pool->align);
++	retval = (void *)(__current_area(pool)->va_start + pool->offset);
+ out:
+ 	mutex_unlock(&pool->mutex);
+ 	return retval;
+@@ -175,7 +170,7 @@ void pmalloc_make_pool_ro(struct pmalloc_pool *pool)
+ 	struct vmap_area *area;
+ 
+ 	mutex_lock(&pool->mutex);
+-	pool->mode = false;
++	pool->mode &= ~PMALLOC_RW;
+ 	llist_for_each_entry(area, pool->vm_areas.first, area_list)
+ 		__protect_area(area);
+ 	mutex_unlock(&pool->mutex);
