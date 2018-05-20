@@ -1,4 +1,4 @@
-Bottom: d043e8f4fa0e7b9dfc67588bfc2e9aee6b50943f
+Bottom: a7ce258cd29d73547b7ac24565d525d4cda35ddc
 Top:    294c0e35c644a01d9b9a77fc9d7a1e8ce4c07f60
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-05-10 20:49:39 +0400
@@ -8,34 +8,6 @@ rework
 
 ---
 
-diff --git a/include/linux/cache.h b/include/linux/cache.h
-index 750621e41d1c..af118f90551a 100644
---- a/include/linux/cache.h
-+++ b/include/linux/cache.h
-@@ -31,6 +31,23 @@
- #define __ro_after_init __attribute__((__section__(".data..ro_after_init")))
- #endif
- 
-+/*
-+ * __rare_write_after_init is used to mark objects that after init cannot
-+ * be modified directly (i.e. after mark_rodata_ro() has been called).
-+ * These objects become effectively read-only, from the perspective of
-+ * performing a direct write, like a variable assignment.
-+ * However, they can be altered through a dedicated function.
-+ * It is intended for those objects which are occasionally modified after
-+ * init, however are they modified so seldomly that the extra cost from
-+ * the indirect modification is either negligible or worth paying, for the
-+ * sake of the hardening gained.
-+ */
-+#ifndef __rare_write_after_init
-+#define __rare_write_after_init \
-+		__attribute__((__section__(".data..rare_write_after_init")))
-+#endif
-+
-+
- #ifndef ____cacheline_aligned
- #define ____cacheline_aligned __attribute__((__aligned__(SMP_CACHE_BYTES)))
- #endif
 diff --git a/include/linux/pmalloc.h b/include/linux/pmalloc.h
 index 0aab95074aa8..b8e3d133c59f 100644
 --- a/include/linux/pmalloc.h
