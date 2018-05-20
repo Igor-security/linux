@@ -9,6 +9,7 @@
 #include <linux/vmalloc.h>
 #include <linux/mman.h>
 #include <linux/uaccess.h>
+#include <linux/pmalloc.h>
 #include <asm/cacheflush.h>
 
 /* Whether or not to fill the target memory area with do_nothing(). */
@@ -26,6 +27,10 @@ static const unsigned long rodata = 0xAA55AA55;
 
 /* This is marked __ro_after_init, so it should ultimately be .rodata. */
 static unsigned long ro_after_init __ro_after_init = 0x55AA5500;
+
+/* This is marked __wr_after_init, so it should be in .rodata. */
+static
+unsigned long wr_after_init __wr_after_init = 0x55AA5500;
 
 /*
  * This just returns to the caller. It is designed to be copied into
@@ -102,6 +107,49 @@ void lkdtm_WRITE_RO_AFTER_INIT(void)
 
 	pr_info("attempting bad ro_after_init write at %p\n", ptr);
 	*ptr ^= 0xabcd1234;
+}
+
+void lkdtm_WRITE_WR_AFTER_INIT(void)
+{
+	unsigned long *ptr = &wr_after_init;
+
+	/*
+	 * Verify we were written to during init. Since an Oops
+	 * is considered a "success", a failure is to just skip the
+	 * real test.
+	 */
+	if ((*ptr & 0xAA) != 0xAA) {
+		pr_info("%p was NOT written during init!?\n", ptr);
+		return;
+	}
+
+	pr_info("attempting bad wr_after_init write at %p\n", ptr);
+	*ptr ^= 0xabcd1234;
+}
+
+#define INIT_VAL 0x5A
+#define END_VAL 0xA5
+
+/* Verify that write rare will not work against read-only memory. */
+static int ro_after_init_data __ro_after_init = INIT_VAL;
+void lkdtm_WRITE_WR_AFTER_INIT_ON_RO_AFTER_INIT(void)
+{
+	pr_info("attempting illegal write rare to __ro_after_init");
+	if (wr_int(&ro_after_init_data, END_VAL) ||
+	     ro_after_init_data == END_VAL)
+		pr_info("Unexpected successful write to __ro_after_init");
+}
+
+/*
+ * "volatile" to force the compiler to not optimize away the reading back.
+ * Is there a better way to do it, than using volatile?
+ */
+static volatile const int const_data = INIT_VAL;
+void lkdtm_WRITE_WR_AFTER_INIT_ON_CONST(void)
+{
+	pr_info("attempting illegal write rare to const data");
+	if (wr_int((int *)&const_data, END_VAL) || const_data == END_VAL)
+		pr_info("Unexpected successful write to const memory");
 }
 
 void lkdtm_WRITE_KERN(void)
@@ -200,4 +248,6 @@ void __init lkdtm_perms_init(void)
 	/* Make sure we can write to __ro_after_init values during __init */
 	ro_after_init |= 0xAA;
 
+	/* Make sure we can write to __wr_after_init during __init */
+	wr_after_init |= 0xAA;
 }
