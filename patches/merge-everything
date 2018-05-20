@@ -1,4 +1,4 @@
-Bottom: 9ac2373189fc2ca60e77423ce39436120c96828a
+Bottom: 3ef609d000c913df4ac4309dc5dea84f8dd608bc
 Top:    9bbca3eb5ab22e1b940aaa4f4305477d8ca68e40
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-03-27 18:37:39 +0300
@@ -747,30 +747,3 @@ index 000000000000..ae69c92d011b
 +MODULE_LICENSE("GPL");
 +MODULE_AUTHOR("Igor Stoppa <igor.stoppa@huawei.com>");
 +MODULE_DESCRIPTION("Test module for pmalloc.");
-diff --git a/mm/usercopy.c b/mm/usercopy.c
-index e9e9325f7638..c4aa7ced36b7 100644
---- a/mm/usercopy.c
-+++ b/mm/usercopy.c
-@@ -20,8 +20,13 @@
- #include <linux/sched/task.h>
- #include <linux/sched/task_stack.h>
- #include <linux/thread_info.h>
-+#include <linux/init.h>
-+#include <linux/debugfs.h>
-+#include <linux/pmalloc.h>
-+#include <linux/sched/clock.h>
- #include <asm/sections.h>
- 
-+
- /*
-  * Checks if a given pointer and length is contained by the current
-  * stack frame (if possible).
-@@ -277,5 +282,8 @@ void __check_object_size(const void *ptr, unsigned long n, bool to_user)
- 
- 	/* Check for object in kernel to avoid text exposure. */
- 	check_kernel_text_object((const unsigned long)ptr, n, to_user);
-+
-+	/* Check if object is from a pmalloc chunk. */
-+	check_pmalloc_object(ptr, n, to_user);
- }
- EXPORT_SYMBOL(__check_object_size);
