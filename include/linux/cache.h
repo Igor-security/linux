@@ -31,6 +31,23 @@
 #define __ro_after_init __attribute__((__section__(".data..ro_after_init")))
 #endif
 
+/*
+ * __rare_write_after_init is used to mark objects that after init cannot
+ * be modified directly (i.e. after mark_rodata_ro() has been called).
+ * These objects become effectively read-only, from the perspective of
+ * performing a direct write, like a variable assignment.
+ * However, they can be altered through a dedicated function.
+ * It is intended for those objects which are occasionally modified after
+ * init, however are they modified so seldomly that the extra cost from
+ * the indirect modification is either negligible or worth paying, for the
+ * sake of the hardening gained.
+ */
+#ifndef __rare_write_after_init
+#define __rare_write_after_init \
+		__attribute__((__section__(".data..rare_write_after_init")))
+#endif
+
+
 #ifndef ____cacheline_aligned
 #define ____cacheline_aligned __attribute__((__aligned__(SMP_CACHE_BYTES)))
 #endif
