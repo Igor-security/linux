@@ -9461,6 +9461,7 @@ F:	include/linux/prmemextra.h
 F:	mm/prmem.c
 F:	mm/test_write_rare.c
 F:	mm/test_pmalloc.c
+F:	include/linux/prlist.h
 
 MEMORY TECHNOLOGY DEVICES (MTD)
 M:	David Woodhouse <dwmw2@infradead.org>
