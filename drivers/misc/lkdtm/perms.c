@@ -9,6 +9,7 @@
 #include <linux/vmalloc.h>
 #include <linux/mman.h>
 #include <linux/uaccess.h>
+#include <linux/pmalloc.h>
 #include <asm/cacheflush.h>
 
 /* Whether or not to fill the target memory area with do_nothing(). */
@@ -26,6 +27,10 @@ static const unsigned long rodata = 0xAA55AA55;
 
 /* This is marked __ro_after_init, so it should ultimately be .rodata. */
 static unsigned long ro_after_init __ro_after_init = 0x55AA5500;
+
+/* This is marked __rare_write_after_init, it should be .rodata. */
+static
+unsigned long rare_write_after_init __rare_write_after_init = 0x55AA5500;
 
 /*
  * This just returns to the caller. It is designed to be copied into
@@ -103,6 +108,48 @@ void lkdtm_WRITE_RO_AFTER_INIT(void)
 	pr_info("attempting bad ro_after_init write at %p\n", ptr);
 	*ptr ^= 0xabcd1234;
 }
+
+void lkdtm_WRITE_RARE_WRITE_AFTER_INIT(void)
+{
+	unsigned long *ptr = &rare_write_after_init;
+
+	/*
+	 * Verify we were written to during init. Since an Oops
+	 * is considered a "success", a failure is to just skip the
+	 * real test.
+	 */
+	if ((*ptr & 0xAA) != 0xAA) {
+		pr_info("%p was NOT written during init!?\n", ptr);
+		return;
+	}
+
+	pr_info("attempting bad rare_write_after_init write at %p\n", ptr);
+	*ptr ^= 0xabcd1234;
+}
+
+#ifdef CONFIG_PROTECTABLE_MEMORY
+void lkdtm_WRITE_RO_PMALLOC(void)
+{
+	struct pmalloc_pool *pool;
+	int *i;
+
+	pool = pmalloc_create_pool(PMALLOC_RO);
+	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
+		return;
+
+	i = pmalloc(pool, sizeof(int));
+	if (WARN(!i, "Failed allocating memory for pmalloc test.")) {
+		pmalloc_destroy_pool(pool);
+		return;
+	}
+
+	*i = INT_MAX;
+	pmalloc_protect_pool(pool);
+
+	pr_info("attempting bad pmalloc write at %p\n", i);
+	*i = 0;
+}
+#endif
 
 void lkdtm_WRITE_KERN(void)
 {
@@ -197,7 +244,9 @@ void lkdtm_ACCESS_USERSPACE(void)
 
 void __init lkdtm_perms_init(void)
 {
-	/* Make sure we can write to __ro_after_init values during __init */
+	/* Test that __ro_after_init is writable during __init */
 	ro_after_init |= 0xAA;
 
+	/* Test that __rare_write_after_init is writable during __init */
+	rare_write_after_init |= 0xAA;
 }
