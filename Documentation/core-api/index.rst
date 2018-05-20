@@ -34,7 +34,7 @@ Core utilities
    timekeeping
    boot-time-mm
    memory-hotplug
-
+   prmem
 
 Interfaces for kernel debugging
 ===============================
