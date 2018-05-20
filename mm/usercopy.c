@@ -20,7 +20,12 @@
 #include <linux/sched/task.h>
 #include <linux/sched/task_stack.h>
 #include <linux/thread_info.h>
+#include <linux/init.h>
+#include <linux/debugfs.h>
+#include <linux/pmalloc.h>
+#include <linux/sched/clock.h>
 #include <asm/sections.h>
+
 
 /*
  * Checks if a given pointer and length is contained by the current
@@ -277,5 +282,8 @@ void __check_object_size(const void *ptr, unsigned long n, bool to_user)
 
 	/* Check for object in kernel to avoid text exposure. */
 	check_kernel_text_object((const unsigned long)ptr, n, to_user);
+
+	/* Check if object is from a pmalloc chunk. */
+	check_pmalloc_object(ptr, n, to_user);
 }
 EXPORT_SYMBOL(__check_object_size);
