@@ -1,4 +1,4 @@
-Bottom: 606ac3a38939bdaee904198631da9fdfe060d2e2
+Bottom: 1b10cdfe9dc551880be79880f250fd16574a4b2c
 Top:    294c0e35c644a01d9b9a77fc9d7a1e8ce4c07f60
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-05-10 20:49:39 +0400
@@ -8,36 +8,6 @@ rework
 
 ---
 
-diff --git a/include/asm-generic/vmlinux.lds.h b/include/asm-generic/vmlinux.lds.h
-index af240573e482..d9216c969308 100644
---- a/include/asm-generic/vmlinux.lds.h
-+++ b/include/asm-generic/vmlinux.lds.h
-@@ -294,6 +294,17 @@
- 	. = VMLINUX_SYMBOL(__start_init_task) + THREAD_SIZE;		\
- 	VMLINUX_SYMBOL(__end_init_task) = .;
- 
-+/*
-+ * Allow architectures to handle rare_write_after_init data on their
-+ * own by defining an empty RARE_WRITE_AFTER_INIT_DATA.
-+ */
-+#ifndef RARE_WRITE_AFTER_INIT_DATA
-+#define RARE_WRITE_AFTER_INIT_DATA					\
-+	VMLINUX_SYMBOL(__start_rare_write_after_init) = .;		\
-+	*(.data..rare_write_after_init)					\
-+	VMLINUX_SYMBOL(__end_rare_write_after_init) = .;
-+#endif
-+
- /*
-  * Allow architectures to handle ro_after_init data on their
-  * own by defining an empty RO_AFTER_INIT_DATA.
-@@ -314,6 +325,7 @@
- 		VMLINUX_SYMBOL(__start_rodata) = .;			\
- 		*(.rodata) *(.rodata.*)					\
- 		RO_AFTER_INIT_DATA	/* Read only after init */	\
-+		RARE_WRITE_AFTER_INIT_DATA /* Rare write after init */	\
- 		KEEP(*(__vermagic))	/* Kernel version magic */	\
- 		. = ALIGN(8);						\
- 		VMLINUX_SYMBOL(__start___tracepoints_ptrs) = .;		\
 diff --git a/include/linux/cache.h b/include/linux/cache.h
 index 750621e41d1c..af118f90551a 100644
 --- a/include/linux/cache.h
