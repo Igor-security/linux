@@ -41,6 +41,17 @@ void lkdtm_WRITE_RO_AFTER_INIT(void);
 void lkdtm_WRITE_WR_AFTER_INIT(void);
 void lkdtm_WRITE_WR_AFTER_INIT_ON_RO_AFTER_INIT(void);
 void lkdtm_WRITE_WR_AFTER_INIT_ON_CONST(void);
+#ifdef CONFIG_PROTECTABLE_MEMORY
+void lkdtm_WRITE_RO_PMALLOC(void);
+void lkdtm_WRITE_AUTO_RO_PMALLOC(void);
+void lkdtm_WRITE_WR_PMALLOC(void);
+void lkdtm_WRITE_AUTO_WR_PMALLOC(void);
+void lkdtm_WRITE_START_WR_PMALLOC(void);
+void lkdtm_WRITE_WR_PMALLOC_ON_RO_PMALLOC(void);
+void lkdtm_WRITE_WR_PMALLOC_ON_STATIC_WR(void);
+void lkdtm_WRITE_WR_PMALLOC_ON_CONST(void);
+void lkdtm_WRITE_WR_PMALLOC_ON_RO_AFT_INIT(void);
+#endif
 void lkdtm_WRITE_KERN(void);
 void lkdtm_EXEC_DATA(void);
 void lkdtm_EXEC_STACK(void);
