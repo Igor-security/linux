@@ -1,7 +1,8 @@
 Version: 1
-Previous: b041919c9c226ead813ca1297efa52aa45aaed07
+Previous: eec0de862264095239e2aefa1a1af4d92942b551
 Head: 702a1dac892b278dd0e073ca32b0364d3f33f134
 Applied:
+  protected-list: 702a1dac892b278dd0e073ca32b0364d3f33f134
 Unapplied:
   merge-everything: 74481e052ace60e8efeef94e666a7895b3a20a41
 Hidden:
