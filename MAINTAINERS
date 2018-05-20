@@ -9458,6 +9458,8 @@ L:	linux-mm@kvack.org
 S:	Maintained
 F:	include/linux/write_rare.h
 F:	mm/test_write_rare.c
+F:	include/linux/pmalloc.h
+F:	mm/pmalloc.c
 
 MEMORY TECHNOLOGY DEVICES (MTD)
 M:	David Woodhouse <dwmw2@infradead.org>
