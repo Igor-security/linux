@@ -27,6 +27,10 @@ static const unsigned long rodata = 0xAA55AA55;
 /* This is marked __ro_after_init, so it should ultimately be .rodata. */
 static unsigned long ro_after_init __ro_after_init = 0x55AA5500;
 
+/* This is marked __rare_write_after_init, so it should be in .rodata. */
+static
+unsigned long rare_write_after_init __rare_write_after_init = 0x55AA5500;
+
 /*
  * This just returns to the caller. It is designed to be copied into
  * non-executable memory regions.
@@ -101,6 +105,24 @@ void lkdtm_WRITE_RO_AFTER_INIT(void)
 	}
 
 	pr_info("attempting bad ro_after_init write at %p\n", ptr);
+	*ptr ^= 0xabcd1234;
+}
+
+void lkdtm_WRITE_RARE_WRITE_AFTER_INIT(void)
+{
+	unsigned long *ptr = &rare_write_after_init;
+
+	/*
+	 * Verify we were written to during init. Since an Oops
+	 * is considered a "success", a failure is to just skip the
+	 * real test.
+	 */
+	if ((*ptr & 0xAA) != 0xAA) {
+		pr_info("%p was NOT written during init!?\n", ptr);
+		return;
+	}
+
+	pr_info("attempting bad rare_write_after_init write at %p\n", ptr);
 	*ptr ^= 0xabcd1234;
 }
 
@@ -200,4 +222,6 @@ void __init lkdtm_perms_init(void)
 	/* Make sure we can write to __ro_after_init values during __init */
 	ro_after_init |= 0xAA;
 
+	/* Make sure we can write to __rare_write_after_init during __init */
+	rare_write_after_init |= 0xAA;
 }
