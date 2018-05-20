@@ -31,6 +31,7 @@ Core utilities
    gfp_mask-from-fs-io
    timekeeping
    boot-time-mm
+   pmalloc
 
 Interfaces for kernel debugging
 ===============================
