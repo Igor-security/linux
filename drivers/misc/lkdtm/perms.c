@@ -267,9 +267,9 @@ void lkdtm_ACCESS_USERSPACE(void)
 
 void __init lkdtm_perms_init(void)
 {
-	/* Make sure we can write to __ro_after_init values during __init */
+	/* Test that __ro_after_init is writable during __init */
 	ro_after_init |= 0xAA;
 
-	/* Make sure we can write to __rare_write_after_init during __init */
+	/* Test that __rare_write_after_init is writable during __init */
 	rare_write_after_init |= 0xAA;
 }
