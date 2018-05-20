@@ -295,6 +295,17 @@
 	VMLINUX_SYMBOL(__end_init_task) = .;
 
 /*
+ * Allow architectures to handle rare_write_after_init data on their
+ * own by defining an empty RARE_WRITE_AFTER_INIT_DATA.
+ */
+#ifndef RARE_WRITE_AFTER_INIT_DATA
+#define RARE_WRITE_AFTER_INIT_DATA					\
+	VMLINUX_SYMBOL(__start_rare_write_after_init) = .;		\
+	*(.data..rare_write_after_init)					\
+	VMLINUX_SYMBOL(__end_rare_write_after_init) = .;
+#endif
+
+/*
  * Allow architectures to handle ro_after_init data on their
  * own by defining an empty RO_AFTER_INIT_DATA.
  */
@@ -314,6 +325,7 @@
 		VMLINUX_SYMBOL(__start_rodata) = .;			\
 		*(.rodata) *(.rodata.*)					\
 		RO_AFTER_INIT_DATA	/* Read only after init */	\
+		RARE_WRITE_AFTER_INIT_DATA /* Rare write after init */	\
 		KEEP(*(__vermagic))	/* Kernel version magic */	\
 		. = ALIGN(8);						\
 		VMLINUX_SYMBOL(__start___tracepoints_ptrs) = .;		\
