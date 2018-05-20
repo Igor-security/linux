@@ -1,4 +1,4 @@
-Bottom: 27e87ccc5b6961f84db114435630c166d5060afa
+Bottom: 9ac2373189fc2ca60e77423ce39436120c96828a
 Top:    9bbca3eb5ab22e1b940aaa4f4305477d8ca68e40
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-03-27 18:37:39 +0300
@@ -428,35 +428,6 @@ index fd37315835b4..d866b605c353 100644
  	system_state = SYSTEM_RUNNING;
  	numa_default_policy();
  
-diff --git a/lib/prot_list.c b/lib/prot_list.c
-new file mode 100644
-index 000000000000..20eacbac6cad
---- /dev/null
-+++ b/lib/prot_list.c
-@@ -0,0 +1,23 @@
-+// SPDX-License-Identifier: GPL-2.0
-+/*
-+ * prot_list.c: protected double linked list
-+ *
-+ * (C) Copyright 2018 Huawei Technologies Co. Ltd.
-+ * Author: Igor Stoppa <igor.stoppa@huawei.com>
-+ */
-+
-+#include <linux/prot_list.h>
-+
-+struct prot_list_pool *prot_list_create_custom_pool(size_t refill,
-+						    unsigned short align_order)
-+{
-+	struct prot_list_pool *pool;
-+
-+	pool = kzalloc(sizeof(struct prot_list_pool), GFP_KERNEL);
-+	if (WARN(!pool, "Could not allocate pool meta data."))
-+		return NULL;
-+	pmalloc_init_custom_pool(&pool->pool, refill, align_order,
-+				 PMALLOC_AUTO_RW);
-+	return pool;
-+}
-+EXPORT_SYMBOL(prot_list_create_custom_pool);
 diff --git a/mm/Kconfig.debug b/mm/Kconfig.debug
 index e5e606ee5f71..15ecaa2ae96a 100644
 --- a/mm/Kconfig.debug
