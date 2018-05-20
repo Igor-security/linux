@@ -855,7 +855,7 @@ static inline void ftrace_dump(enum ftrace_dump_mode oops_dump_mode) { }
 #define __no_side_effects(x, y) \
 		(__is_constexpr(x) && __is_constexpr(y))
 
-#define __safe_cmp(x, y) \
+#define __safe_operands(x, y) \
 		(__typecheck(x, y) && __no_side_effects(x, y))
 
 #define __cmp(x, y, op)	((x) op (y) ? (x) : (y))
@@ -866,7 +866,7 @@ static inline void ftrace_dump(enum ftrace_dump_mode oops_dump_mode) { }
 		__cmp(unique_x, unique_y, op); })
 
 #define __careful_cmp(x, y, op) \
-	__builtin_choose_expr(__safe_cmp(x, y), \
+	__builtin_choose_expr(__safe_operands(x, y), \
 		__cmp(x, y, op), \
 		__cmp_once(x, y, __UNIQUE_ID(__x), __UNIQUE_ID(__y), op))
 
