@@ -304,6 +304,25 @@
 	__end_init_task = .;
 
 /*
+ * Allow architectures to handle rare_write_after_init data on their
+ * own by defining an empty RARE_WRITE_AFTER_INIT_DATA.
+ * However, it's important that pages containing RARE_WRITE data do not
+ * hold anything else, to avoid both accidentally unprotecting something
+ * that is supposed to stay read-only all the time and also to protect
+ * something else that is supposed to be writeable all the time.
+ */
+#ifndef RARE_WRITE_AFTER_INIT_DATA
+#define RARE_WRITE_AFTER_INIT_DATA(align)				\
+	. = ALIGN(PAGE_SIZE);						\
+	VMLINUX_SYMBOL(__start_rare_write_after_init) = .;		\
+	. = ALIGN(align);						\
+	*(.data..rare_write_after_init)					\
+	. = ALIGN(PAGE_SIZE);						\
+	VMLINUX_SYMBOL(__end_rare_write_after_init) = .;		\
+	. = ALIGN(align);
+#endif
+
+/*
  * Allow architectures to handle ro_after_init data on their
  * own by defining an empty RO_AFTER_INIT_DATA.
  */
@@ -323,6 +342,7 @@
 		__start_rodata = .;					\
 		*(.rodata) *(.rodata.*)					\
 		RO_AFTER_INIT_DATA	/* Read only after init */	\
+		RARE_WRITE_AFTER_INIT_DATA(align) /* Rare write aft init */	\
 		KEEP(*(__vermagic))	/* Kernel version magic */	\
 		. = ALIGN(8);						\
 		__start___tracepoints_ptrs = .;				\
