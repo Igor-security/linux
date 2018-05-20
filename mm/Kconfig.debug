@@ -101,3 +101,12 @@ config DEBUG_RARE_WRITE_AFTER_INIT_TEST
     ---help---
       This option enables a testcase for the rare-write mechanism, applied
       to statically allocated memory.
+
+config DEBUG_PROTECTABLE_MEMORY_TEST
+    tristate "Run self test for pmalloc memory allocator"
+    depends on STRICT_KERNEL_RWX
+    select PROTECTABLE_MEMORY
+    default n
+    ---help---
+      Tries to verify that pmalloc works correctly and that the memory is
+      effectively protected.
