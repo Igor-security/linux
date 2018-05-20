@@ -1,0 +1,1578 @@
+Bottom: 691fa7083ce8041eda3c0ebb24396f4406385542
+Top:    9bbca3eb5ab22e1b940aaa4f4305477d8ca68e40
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-03-27 18:37:39 +0300
+
+Merge everything
+
+// This is the 1st commit message:
+
+Protectable Memory
+
+The MMU available in many systems running Linux can often provide R/O
+protection to the memory pages it handles.
+
+However, the MMU-based protection works efficiently only when said pages
+contain exclusively data that will not need further modifications.
+
+Statically allocated variables can be segregated into a dedicated
+section (that's how __ro_after_init works), but this does not sit very
+well with dynamically allocated ones.
+
+Dynamic allocation does not provide, currently, any means for grouping
+variables in memory pages that would contain exclusively data suitable
+for conversion to read only access mode.
+
+The allocator here provided (pmalloc - protectable memory allocator)
+introduces the concept of pools of protectable memory.
+
+A module can instantiate a pool, and then refer any allocation request to
+the pool handler it has received.
+
+A pool is organized ias list of areas of virtually contiguous memory.
+Whenever the protection functionality is invoked on a pool, all the
+areas it contains that are not yet read-only are write-protected.
+
+The process of growing and protecting the pool can be iterated at will.
+Each iteration will prevent further allocation from the memory area
+currently active, turn it into read-only mode and then proceed to
+secure whatever other area might still be unprotected.
+
+Write-protcting some part of a pool before completing all the
+allocations can be wasteful, however it will guarrantee the minimum
+window of vulnerability, sice the data can be allocated, initialized
+and protected in a single sweep.
+
+There are pros and cons, depending on the allocation patterns, the size
+of the areas being allocated, the time intervals between initialization
+and protection.
+
+Dstroying a pool is the only way to claim back the associated memory.
+It is up to its user to avoid any further references to the memory that
+was allocated, once the destruction is invoked.
+
+An example where it is desirable to destroy a pool and claim back its
+memory is when unloading a kernel module.
+
+A module can have as many pools as needed.
+
+Since pmalloc memory is obtained from vmalloc, an attacker that has
+gained access to the physical mapping, still has to identify where the
+target of the attack (in virtually contiguous mapping) is located.
+
+Compared to plain vmalloc, pmalloc does not generate as much TLB
+trashing, since it can host multiple allocations in the same page,
+where present.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+// This is the commit message #2:
+
+lkdtm: crash on overwriting protected pmalloc var
+
+Verify that pmalloc read-only protection is in place: trying to
+overwrite a protected variable will crash the kernel.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+// This is the commit message #3:
+
+Documentation for Pmalloc
+
+Detailed documentation about the protectable memory allocator.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+// This is the commit message #4:
+
+Pmalloc selftest
+
+Add basic self-test functionality for pmalloc.
+
+The testing is introduced as early as possible, right after the main
+dependency, genalloc, has passed successfully, so that it can help
+diagnosing failures in pmalloc users.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+// This is the commit message #5:
+
+Pmalloc Rare Write: modify selected pools
+
+While the vanilla version of pmalloc provides support for permanently
+transitioning between writable and read-only of a memory pool, this
+patch seeks to support a separate class of data, which would still
+benefit from write protection, most of the time, but it still needs to
+be modifiable. Maybe very seldom, but still cannot be permanently marked
+as read-only.
+
+The major changes are:
+- extra parameter, at pool creation, to request modifiable memory
+- pmalloc_rare_write function, to alter the value of modifiable allocations
+
+The implementation tries to prevent attacks by reducing the aperture
+available for modifying the memory, which is also mapped at a random
+address, which is harder to retrieve, even in case of another core
+racing with the one performing the modification.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+CC: Carlos Chinea Perez <carlos.chinea.perez@huawei.com>
+CC: Remi Denis Courmont <remi.denis.courmont@huawei.com>
+
+// This is the commit message #6:
+
+Preliminary self test for pmalloc rare write
+
+Try to alter locked but modifiable pools.
+The test neds some cleanup and expansion.
+It is provided primarily as reference.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+
+---
+
+diff --git a/Documentation/core-api/index.rst b/Documentation/core-api/index.rst
+index c670a8031786..8f5de42d6571 100644
+--- a/Documentation/core-api/index.rst
++++ b/Documentation/core-api/index.rst
+@@ -25,6 +25,7 @@ Core utilities
+    genalloc
+    errseq
+    printk-formats
++   pmalloc
+ 
+ Interfaces for kernel debugging
+ ===============================
+diff --git a/Documentation/core-api/pmalloc.rst b/Documentation/core-api/pmalloc.rst
+new file mode 100644
+index 000000000000..e0fa4a5462a9
+--- /dev/null
++++ b/Documentation/core-api/pmalloc.rst
+@@ -0,0 +1,189 @@
++.. SPDX-License-Identifier: GPL-2.0
++
++.. _pmalloc:
++
++Protectable memory allocator
++============================
++
++Purpose
++-------
++
++The pmalloc library is meant to provide read-only status to data that,
++for some reason, could neither be declared as constant, nor could it take
++advantage of the qualifier __ro_after_init.
++But it is in spirit either fully write-once/read-only or at least
++write-seldom/mostly-read-only.
++At some point it might get teared down, however that doesn't affect how it
++is treated, while it's still relevant.
++Pmalloc protects data from both accidental and malicious overwrites.
++
++Example: A policy that is loaded from userspace.
++
++
++Concept
++-------
++
++The MMU available in the system can be used to write protect memory pages.
++Unfortunately this feature cannot be used as-it-is, to protect sensitive
++data, because this potentially read-only data is typically interleaved
++with other data, which must stay writeable.
++
++pmalloc introduces the concept of protectable memory pools.
++A pool contains a list of areas of virtually contiguous pages of
++memory. When memory is requested from a pool, the requests are satisfied
++by reserving adequate amounts of memory from the active area of memory in
++that pool. A request can cross page boundaries, therefore an area is the
++minimum granularity that pmalloc allows to protect.
++
++There might be special cases where an area contains only one page, but
++they are still addressed as areas.
++
++Areas are allocated on-the-fly, when the space available is insufficient
++for satisfying the latest request received.
++
++To facilitate the conversion of existing code to pmalloc pools, several
++helper functions are provided, mirroring their k/vmalloc counterparts.
++
++However, there is no pfree(), because the memory protected by a pool is
++released exclusively when the pool is destroyed.
++
++
++When to use pmalloc
++-------------------
++
++- Pmalloc memory is intended to complement __ro_after_init.
++  __ro_after_init requires that the initialization value is applied before
++  init is completed. If this is not possible, then pmalloc can be used.
++
++- Pmalloc can be useful also when the amount of data to protect is not
++  known at compile time and the memory can only be allocated dynamically.
++
++- When it's not possible to fix a point in time after which the data
++  becomes immutable, but it's still fairly unlikely that it will change,
++  rare write becomes a less vulnerable alternative to leaving the data
++  located in freely rewritable memory.
++
++- Finally, it can be useful also when it is desirable to control
++  dynamically (for example throguh the kernel command line) if some
++  specific data ought to be protected or not, without having to rebuild
++  the kernel, for toggling a "const" qualifier.
++  This can be used, for example, by a linux distro, to create a more
++  versatile binary kernel and allow its users to toggle between developer
++  (unprotected) or production (protected) modes by reconfiguring the
++  bootloader.
++
++
++When *not* to use pmalloc
++-------------------------
++
++Using pmalloc is not a good idea in some cases:
++
++- when optimizing TLB utilization is paramount:
++  pmalloc relies on virtual memory areas and will therefore use more
++  tlb entries. It still does a better job of it, compared to invoking
++  vmalloc for each allocation, but it is undeniably less optimized wrt to
++  TLB use than using the physmap directly, through kmalloc or similar.
++
++- when rare-write is not-so-rare:
++  rare-write does not allow updates in-place, it rather expects to be
++  provided a version of how the data is supposed to be, and then it
++  performs the update accordingly, by modifying the original data.
++  Such procedure takes an amount of time that is proportional to the
++  number of pages affected.
++
++
++Caveats
++-------
++
++- When a pool is protected, whatever memory would be still available in
++  the current vmap_area (from which allocations are performed) is
++  relinquished.
++
++- As already explained, freeing of memory is not supported. Pages will be
++  returned to the system upon destruction of the memory pool that they
++  belong to. For this reason, no pfree() function is provided
++
++- The address range available for vmalloc (and thus for pmalloc too) is
++  limited, on 32-bit systems. However it shouldn't be an issue, since not
++  much data is expected to be dynamically allocated and turned into
++  read-only.
++
++- Regarding SMP systems, the allocations are expected to happen mostly
++  during an initial transient, after which there should be no more need
++  to perform cross-processor synchronizations of page tables.
++  Loading of kernel modules is an exception to this, but it's not expected
++  to happen with such high frequency to become a problem.
++
++- While pmalloc memory can be protected, since it is allocated dynamically,
++  it is still subject to indirect attacks, where the memory itself is not
++  touched, but anything used as reference to the allocation can be altered.
++  In some cases the allocation from a pmalloc pool is referred to by another
++  allocation, from either the same or another pool, however at some point,
++  there will be a base reference which can be attacked, if it cannot be
++  protected.
++  This base reference, or "anchor" is suitable for protection using
++  __ro_after_init, since it only needs to store the *address* of the
++  pmalloc allocation that will be initialized and protected later on.
++  But the allocation can take place during init, and its address is known
++  and constant.
++
++- The users of rare write must take care of ensuring the atomicity of the
++  action, respect to the way they use the data being altered; for example,
++  take a lock before making a copy of the value to modify (if it's
++  relevant), then alter it, issue the call to rare write and finally
++  release the lock. Some special scenario might be exempt from the need
++  for locking, but in general rare-write must be treated as an operation
++  that can incur into races.
++
++
++
++Utilization
++-----------
++
++Typical sequence, when using pmalloc
++
++Steps to perforn during init:
++
++#. create an "anchor", with the modifier __ro_after_init
++
++#. create a pool, choosing if it can be altered or not, after protection
++
++   :c:func:`pmalloc_create_pool`
++
++#. issue an allocation requests to the pool with either
++
++   :c:func:`pmalloc`
++
++   or one of its variants, like
++
++   :c:func:`pzalloc`
++
++   assigning its address to the anchor
++
++#. iterate the previous points as needed
++
++The Following steps can be performed at any time, both during and after
++init, as long as they strictly come after the previous sequence.
++
++#. initialize with the desired value the memory obtained from the pool(s)
++
++#. write-protect the memory so far allocated
++
++   :c::func:`pmalloc_protect_pool`
++
++#. [optional] modify the pool, if it was created as rewritable
++
++   :c::func:`pmalloc_rare_write`
++
++#. iterate over the last 3 points as needed
++
++#. [optional] destroy the pool
++
++   :c:func:`pmalloc_destroy_pool`
++
++
++API
++---
++
++.. kernel-doc:: include/linux/pmalloc.h
++.. kernel-doc:: mm/pmalloc.c
+diff --git a/drivers/misc/lkdtm/core.c b/drivers/misc/lkdtm/core.c
+index 2154d1bfd18b..c9fd42bda6ee 100644
+--- a/drivers/misc/lkdtm/core.c
++++ b/drivers/misc/lkdtm/core.c
+@@ -155,6 +155,9 @@ static const struct crashtype crashtypes[] = {
+ 	CRASHTYPE(ACCESS_USERSPACE),
+ 	CRASHTYPE(WRITE_RO),
+ 	CRASHTYPE(WRITE_RO_AFTER_INIT),
++#ifdef CONFIG_PROTECTABLE_MEMORY
++	CRASHTYPE(WRITE_RO_PMALLOC),
++#endif
+ 	CRASHTYPE(WRITE_KERN),
+ 	CRASHTYPE(REFCOUNT_INC_OVERFLOW),
+ 	CRASHTYPE(REFCOUNT_ADD_OVERFLOW),
+diff --git a/drivers/misc/lkdtm/lkdtm.h b/drivers/misc/lkdtm/lkdtm.h
+index 9e513dcfd809..dcda3ae76ceb 100644
+--- a/drivers/misc/lkdtm/lkdtm.h
++++ b/drivers/misc/lkdtm/lkdtm.h
+@@ -38,6 +38,7 @@ void lkdtm_READ_BUDDY_AFTER_FREE(void);
+ void __init lkdtm_perms_init(void);
+ void lkdtm_WRITE_RO(void);
+ void lkdtm_WRITE_RO_AFTER_INIT(void);
++void lkdtm_WRITE_RO_PMALLOC(void);
+ void lkdtm_WRITE_KERN(void);
+ void lkdtm_EXEC_DATA(void);
+ void lkdtm_EXEC_STACK(void);
+diff --git a/drivers/misc/lkdtm/perms.c b/drivers/misc/lkdtm/perms.c
+index 53b85c9d16b8..6dfab1fbc313 100644
+--- a/drivers/misc/lkdtm/perms.c
++++ b/drivers/misc/lkdtm/perms.c
+@@ -9,6 +9,7 @@
+ #include <linux/vmalloc.h>
+ #include <linux/mman.h>
+ #include <linux/uaccess.h>
++#include <linux/pmalloc.h>
+ #include <asm/cacheflush.h>
+ 
+ /* Whether or not to fill the target memory area with do_nothing(). */
+@@ -104,6 +105,30 @@ void lkdtm_WRITE_RO_AFTER_INIT(void)
+ 	*ptr ^= 0xabcd1234;
+ }
+ 
++#ifdef CONFIG_PROTECTABLE_MEMORY
++void lkdtm_WRITE_RO_PMALLOC(void)
++{
++	struct pmalloc_pool *pool;
++	int *i;
++
++	pool = pmalloc_create_pool(PMALLOC_RO);
++	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
++		return;
++
++	i = pmalloc(pool, sizeof(int));
++	if (WARN(!i, "Failed allocating memory for pmalloc test.")) {
++		pmalloc_destroy_pool(pool);
++		return;
++	}
++
++	*i = INT_MAX;
++	pmalloc_protect_pool(pool);
++
++	pr_info("attempting bad pmalloc write at %p\n", i);
++	*i = 0;
++}
++#endif
++
+ void lkdtm_WRITE_KERN(void)
+ {
+ 	size_t size;
+diff --git a/include/linux/pmalloc.h b/include/linux/pmalloc.h
+new file mode 100644
+index 000000000000..b8e3d133c59f
+--- /dev/null
++++ b/include/linux/pmalloc.h
+@@ -0,0 +1,493 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * pmalloc.h: Header for Protectable Memory Allocator
++ *
++ * (C) Copyright 2017-18 Huawei Technologies Co. Ltd.
++ * Author: Igor Stoppa <igor.stoppa@huawei.com>
++ */
++
++#ifndef _LINUX_PMALLOC_H
++#define _LINUX_PMALLOC_H
++
++#ifndef CONFIG_PROTECTABLE_MEMORY
++
++/**
++ * check_pmalloc_object - hardened usercopy stub if pmalloc is unavailable
++ * @ptr: the beginning of the memory to check
++ * @n: the size of the memory to check
++ * @to_user: copy to userspace or from userspace
++ *
++ * If pmalloc is disabled, there is nothing to check.
++ */
++static inline
++void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
++{
++}
++
++#else
++
++#ifdef pr_fmt
++#undef pr_fmt
++#endif
++
++#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
++
++/*
++ * Library for dynamic allocation of pools of protectable memory.
++ * A pool is a single linked list of vmap_area structures.
++ * Whenever a pool is protected, all the areas it contains at that point
++ * are write protected.
++ * More areas can be added and protected, in the same way.
++ * Memory in a pool cannot be individually unprotected, but the pool can
++ * be destroyed.
++ * Upon destruction of a certain pool, all the related memory is released,
++ * including its metadata.
++ *
++ * Depending on the type of protection that was chosen, the memory can be
++ * either completely read-only or it can support rare-writes.
++ *
++ * The rare-write mechanism is intended to provide no read overhead and
++ * still some form of protection, while a selected area is modified.
++ * This will incur into a penalty that is partially depending on the
++ * specific architecture, but in general is the price to pay for limiting
++ * the attack surface, while the change takes place.
++ *
++ * For additional safety, it is not possible to have in the same pool both
++ * rare-write and unmodifiable memory.
++ */
++
++#include <linux/set_memory.h>
++#include <linux/mm.h>
++#include <linux/vmalloc.h>
++#include <linux/string.h>
++#include <linux/slab.h>
++#include <linux/mutex.h>
++#include <linux/list.h>
++#include <linux/llist.h>
++
++#define PMALLOC_REFILL_DEFAULT (0)
++#define PMALLOC_ALIGN_DEFAULT ARCH_KMALLOC_MINALIGN
++
++
++/*
++ * A pool can be set either for rare-write or read-only mode.
++ * In both cases, it can be managed either manually or automatically.
++ */
++#define PMALLOC_RO		0x00
++#define PMALLOC_RW		0x01
++#define PMALLOC_AUTO		0x02
++#define PMALLOC_MANUAL_RO	PMALLOC_RO
++#define PMALLOC_MANUAL_RW	PMALLOC_RW
++#define PMALLOC_AUTO_RO		(PMALLOC_RO | PMALLOC_AUTO)
++#define PMALLOC_AUTO_RW		(PMALLOC_RW | PMALLOC_AUTO)
++
++#define VM_PMALLOC_PROTECTED_MASK (VM_PMALLOC | VM_PMALLOC_PROTECTED)
++#define VM_PMALLOC_REWRITABLE_MASK \
++	(VM_PMALLOC | VM_PMALLOC_REWRITABLE)
++#define VM_PMALLOC_PROTECTED_REWRITABLE_MASK \
++	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
++#define VM_PMALLOC_MASK \
++	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
++
++
++struct pmalloc_pool {
++	struct mutex mutex;
++	struct list_head pool_node;
++	struct llist_head vm_areas;
++	size_t refill;
++	size_t offset;
++	size_t align;
++	uint8_t mode;
++};
++
++
++/*
++ * Helper functions, not part of the API.
++ * They are implemented as inlined functions, instead of macros, for
++ * additional type-checking, however they are not meant to be called
++ * directly by pmalloc users.
++ */
++static __always_inline unsigned long __area_flags(struct vmap_area *area)
++{
++	return area->vm->flags & VM_PMALLOC_MASK;
++}
++
++static __always_inline void __tag_area(struct vmap_area *area, uint32_t mask)
++{
++	area->vm->flags |= mask;
++}
++
++static __always_inline void __untag_area(struct vmap_area *area)
++{
++	area->vm->flags &= ~VM_PMALLOC_MASK;
++}
++
++static __always_inline struct vmap_area *__current_area(struct pmalloc_pool
++							*pool)
++{
++	return llist_entry(pool->vm_areas.first, struct vmap_area,
++			   area_list);
++}
++
++static __always_inline
++bool __area_matches_mask(struct vmap_area *area, unsigned long mask)
++{
++	return (area->vm->flags & mask) == mask;
++}
++
++static __always_inline bool __is_area_protected(struct vmap_area *area)
++{
++	return __area_matches_mask(area, VM_PMALLOC_PROTECTED_MASK);
++}
++
++static __always_inline bool __is_area_rewritable(struct vmap_area *area)
++{
++	return __area_matches_mask(area, VM_PMALLOC_REWRITABLE_MASK);
++}
++
++static __always_inline void __protect_area(struct vmap_area *area)
++{
++	if (unlikely(__is_area_protected(area)))
++		return;
++	set_memory_ro(area->va_start, area->vm->nr_pages);
++	area->vm->flags |= VM_PMALLOC_PROTECTED_MASK;
++}
++
++static __always_inline void __make_area_ro(struct vmap_area *area)
++{
++	area->vm->flags &= ~VM_PMALLOC_REWRITABLE;
++	__protect_area(area);
++}
++
++static __always_inline void __unprotect_area(struct vmap_area *area)
++{
++	if (likely(__is_area_protected(area)))
++		set_memory_rw(area->va_start, area->vm->nr_pages);
++	__untag_area(area);
++}
++
++static __always_inline void __destroy_area(struct vmap_area *area)
++{
++	WARN(!__is_area_protected(area), "Destroying unprotected area.");
++	__unprotect_area(area);
++	vfree((void *)area->va_start);
++}
++
++static __always_inline bool __empty(struct pmalloc_pool *pool)
++{
++	return unlikely(llist_empty(&pool->vm_areas));
++}
++
++static __always_inline bool __protected(struct pmalloc_pool *pool)
++{
++	return __is_area_protected(__current_area(pool));
++}
++
++static inline bool __exhausted(struct pmalloc_pool *pool, size_t size)
++{
++	size_t space_before;
++	size_t space_after;
++
++	space_before = round_down(pool->offset, pool->align);
++	space_after = pool->offset - space_before;
++	return unlikely(space_after < size && space_before < size);
++}
++
++static __always_inline
++bool __space_needed(struct pmalloc_pool *pool, size_t size)
++{
++	return __empty(pool) || __protected(pool) || __exhausted(pool, size);
++}
++
++static __always_inline size_t __get_area_pages_size(struct vmap_area *area)
++{
++	return area->vm->nr_pages * PAGE_SIZE;
++}
++
++static inline int is_pmalloc_object(const void *ptr, const unsigned long n)
++{
++	struct vm_struct *area;
++	unsigned long start = (unsigned long)ptr;
++	unsigned long end = start + n;
++	unsigned long area_end;
++
++	if (likely(!is_vmalloc_addr(ptr)))
++		return false;
++
++	area = vmalloc_to_page(ptr)->area;
++	if (unlikely(!(area->flags & VM_PMALLOC)))
++		return false;
++
++	area_end = area->nr_pages * PAGE_SIZE + (unsigned long)area->addr;
++	return (start <= end) && (end <= area_end);
++}
++
++static __always_inline size_t __get_area_pages_end(struct vmap_area *area)
++{
++	return area->va_start + __get_area_pages_size(area);
++}
++
++static __always_inline
++bool __area_contains_range(struct vmap_area *area, const void *addr,
++			   size_t n_bytes)
++{
++	size_t area_end = __get_area_pages_end(area);
++	size_t range_start = (size_t)addr;
++	size_t range_end = range_start + n_bytes;
++
++	return (area->va_start <= range_start) &&
++	       (range_start < area_end) &&
++	       (area->va_start <= range_end) &&
++	       (range_end <= area_end);
++}
++
++static __always_inline
++struct vmap_area *__pool_get_area(struct pmalloc_pool *pool,
++				  const void *addr, size_t n_bytes)
++{
++	struct vmap_area *area;
++
++	llist_for_each_entry(area, pool->vm_areas.first, area_list)
++		if (__area_contains_range(area, addr,  n_bytes))
++			return area;
++	return NULL;
++}
++
++/*
++ * Pmalloc API
++  */
++void __noreturn usercopy_abort(const char *name, const char *detail,
++			       bool to_user, unsigned long offset,
++			       unsigned long len);
++
++/**
++ * check_pmalloc_object - helper for hardened usercopy
++ * @ptr: the beginning of the memory to check
++ * @n: the size of the memory to check
++ * @to_user: copy to userspace or from userspace
++ *
++ * If the check is ok, it will fall-through, otherwise it will abort.
++ * The function is inlined, to minimize the performance impact of the
++ * extra check to perform on a typically hot path.
++ * Micro benchmarking with QEMU shows a reduction of the time spent in this
++ * fragment by 60%, when inlined.
++ */
++static inline
++void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
++{
++	int retv;
++
++	retv = is_pmalloc_object(ptr, n);
++	if (unlikely(retv)) {
++		if (unlikely(!to_user))
++			usercopy_abort("pmalloc",
++				       "writing to pmalloc object", to_user,
++				       (const unsigned long)ptr, n);
++		if (retv < 0)
++			usercopy_abort("pmalloc",
++				       "invalid pmalloc object", to_user,
++				       (const unsigned long)ptr, n);
++	}
++}
++
++void pmalloc_init_custom_pool(struct pmalloc_pool *pool, size_t refill,
++			      unsigned short align_order, uint8_t mode);
++
++struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
++						unsigned short align_order,
++						uint8_t mode);
++
++/**
++ * pmalloc_create_pool() - create a protectable memory pool
++ * @mode: can the data be altered after protection
++ *
++ * Shorthand for pmalloc_create_custom_pool() with default argument:
++ * * refill is set to PMALLOC_REFILL_DEFAULT
++ * * align_order is set to PMALLOC_ALIGN_DEFAULT
++ *
++ * Return:
++ * * pointer to the new pool	- success
++ * * NULL			- error
++ */
++static inline struct pmalloc_pool *pmalloc_create_pool(uint8_t mode)
++{
++	return pmalloc_create_custom_pool(PMALLOC_REFILL_DEFAULT,
++					  PMALLOC_ALIGN_DEFAULT,
++					  mode);
++}
++
++void *pmalloc(struct pmalloc_pool *pool, size_t size);
++
++/**
++ * pzalloc() - zero-initialized version of pmalloc()
++ * @pool: handle to the pool to be used for memory allocation
++ * @size: amount of memory (in bytes) requested
++ *
++ * Executes pmalloc(), initializing the memory requested to 0, before
++ * returning its address.
++ *
++ * Return:
++ * * pointer to the memory requested	- success
++ * * NULL				- error
++ */
++static inline void *pzalloc(struct pmalloc_pool *pool, size_t size)
++{
++	void *ptr = pmalloc(pool, size);
++
++	if (likely(ptr))
++		memset(ptr, 0, size);
++	return ptr;
++}
++
++/**
++ * pmalloc_array() - array version of pmalloc()
++ * @pool: handle to the pool to be used for memory allocation
++ * @n: number of elements in the array
++ * @size: amount of memory (in bytes) requested for each element
++ *
++ * Executes pmalloc(), on an array.
++ *
++ * Return:
++ * * the pmalloc result	- success
++ * * NULL		- error
++ */
++
++static inline
++void *pmalloc_array(struct pmalloc_pool *pool, size_t n, size_t size)
++{
++	if (unlikely(size != 0) && unlikely(n > SIZE_MAX / size))
++		return NULL;
++	return pmalloc(pool, n * size);
++}
++
++/**
++ * pcalloc() - array version of pzalloc()
++ * @pool: handle to the pool to be used for memory allocation
++ * @n: number of elements in the array
++ * @size: amount of memory (in bytes) requested for each element
++ *
++ * Executes pzalloc(), on an array.
++ *
++ * Return:
++ * * the pmalloc result	- success
++ * * NULL		- error
++ */
++static inline
++void *pcalloc(struct pmalloc_pool *pool, size_t n, size_t size)
++{
++	if (unlikely(size != 0) && unlikely(n > SIZE_MAX / size))
++		return NULL;
++	return pzalloc(pool, n * size);
++}
++
++/**
++ * pstrdup() - duplicate a string, using pmalloc()
++ * @pool: handle to the pool to be used for memory allocation
++ * @s: string to duplicate
++ *
++ * Generates a copy of the given string, allocating sufficient memory
++ * from the given pmalloc pool.
++ *
++ * Return:
++ * * pointer to the replica	- success
++ * * NULL			- error
++ */
++static inline char *pstrdup(struct pmalloc_pool *pool, const char *s)
++{
++	size_t len;
++	char *buf;
++
++	len = strlen(s) + 1;
++	buf = pmalloc(pool, len);
++	if (likely(buf))
++		strncpy(buf, s, len);
++	return buf;
++}
++
++
++/*
++ * Non-API, lock-unsafe rare-write, meant only for internal use, where the
++ * locking must span over multiple rare-write operations to the same pool,
++ * for ensuring data coherency.
++ */
++static __always_inline
++bool __pmalloc_rare_write(struct pmalloc_pool *pool, const void *dst,
++			  const void *src, size_t n_bytes)
++{
++	struct vmap_area *area;
++	struct page *page;
++	void *base;
++	size_t size;
++	unsigned long offset;
++
++	/*
++	 * The following sanitation is meant to make life harder for
++	 * attempts at using ROP/JOP to call this function against areas
++	 * that are not supposed to be modifiable.
++	 */
++	area = __pool_get_area(pool, dst, n_bytes);
++	if (WARN(!area, "Destination range not in pool"))
++		return false;
++	if (WARN(!__is_area_rewritable(area),
++		 "Attempting to modify non rewritable area"))
++		return false;
++	while (n_bytes) {
++		size_t offset_complement;
++		page = vmalloc_to_page(dst);
++		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
++		if (WARN(!base, "failed to remap rewritable page"))
++			return false;
++		offset = (unsigned long)dst & ~PAGE_MASK;
++		offset_complement = ((size_t)PAGE_SIZE) - offset;
++		size = min(((int)n_bytes), ((int)offset_complement));
++		memcpy(base + offset, src, size);
++		vunmap(base);
++		dst += size;
++		src += size;
++		n_bytes -= size;
++	}
++	return true;
++}
++
++/**
++ * pmalloc_rare_write() - alters the content of a rewritable pool
++ * @pool: the pool associated to the memory to write-protect
++ * @destination: where to write the new data
++ * @source: the location of the data to replicate into the pool
++ * @n_bytes: the size of the region to modify
++ *
++ * The rare-write functionality is fully implemented as __always_inline,
++ * to prevent having an internal function call that is capable of modifying
++ * write protected memory.
++ * Fully inlining the function allows the compiler to optimize away its
++ * interface, making it harder for an attacker to hijack it.
++ * This still leaves the door open to attacks that might try to reuse part
++ * of the code, by jumping in the middle of the function, however it can
++ * be mitigated by having a compiler plugin that enforces Control Flow
++ * Integrity (CFI).
++ * Any addition/modification to the rare-write path must follow the same
++ * approach.
++
++ * Return:
++ * * true	- success
++ * * false	- error
++ */
++static __always_inline
++bool pmalloc_rare_write(struct pmalloc_pool *pool, const void *destination,
++			const void *source, size_t n_bytes)
++{
++	bool retval;
++
++	mutex_lock(&pool->mutex);
++	retval = __pmalloc_rare_write(pool, destination, source, n_bytes);
++	mutex_unlock(&pool->mutex);
++	return retval;
++}
++
++void pmalloc_protect_pool(struct pmalloc_pool *pool);
++
++void pmalloc_make_pool_ro(struct pmalloc_pool *pool);
++
++void pmalloc_destroy_pool(struct pmalloc_pool *pool);
++#endif
++#endif
+diff --git a/include/linux/vmalloc.h b/include/linux/vmalloc.h
+index 2d07dfef3cfd..d0b747a78271 100644
+--- a/include/linux/vmalloc.h
++++ b/include/linux/vmalloc.h
+@@ -20,6 +20,9 @@ struct notifier_block;		/* in notifier.h */
+ #define VM_UNINITIALIZED	0x00000020	/* vm_struct is not fully initialized */
+ #define VM_NO_GUARD		0x00000040      /* don't add guard page */
+ #define VM_KASAN		0x00000080      /* has allocated kasan shadow memory */
++#define VM_PMALLOC		0x00000100	/* pmalloc area - see docs */
++#define VM_PMALLOC_REWRITABLE	0x00000200	/* pmalloc rewritable area */
++#define VM_PMALLOC_PROTECTED	0x00000400	/* pmalloc protected area */
+ /* bits [20..32] reserved for arch specific ioremap internals */
+ 
+ /*
+@@ -133,6 +136,7 @@ extern struct vm_struct *__get_vm_area_caller(unsigned long size,
+ 					const void *caller);
+ extern struct vm_struct *remove_vm_area(const void *addr);
+ extern struct vm_struct *find_vm_area(const void *addr);
++extern struct vmap_area *find_vmap_area(unsigned long addr);
+ 
+ extern int map_vm_area(struct vm_struct *area, pgprot_t prot,
+ 			struct page **pages);
+diff --git a/init/main.c b/init/main.c
+index fd37315835b4..d866b605c353 100644
+--- a/init/main.c
++++ b/init/main.c
+@@ -1053,6 +1053,7 @@ static inline void mark_readonly(void)
+ }
+ #endif
+ 
++int test_static_rare_write(void);
+ static int __ref kernel_init(void *unused)
+ {
+ 	int ret;
+@@ -1064,6 +1065,7 @@ static int __ref kernel_init(void *unused)
+ 	jump_label_invalidate_initmem();
+ 	free_initmem();
+ 	mark_readonly();
++	test_static_rare_write();
+ 	system_state = SYSTEM_RUNNING;
+ 	numa_default_policy();
+ 
+diff --git a/lib/prot_list.c b/lib/prot_list.c
+new file mode 100644
+index 000000000000..20eacbac6cad
+--- /dev/null
++++ b/lib/prot_list.c
+@@ -0,0 +1,23 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * prot_list.c: protected double linked list
++ *
++ * (C) Copyright 2018 Huawei Technologies Co. Ltd.
++ * Author: Igor Stoppa <igor.stoppa@huawei.com>
++ */
++
++#include <linux/prot_list.h>
++
++struct prot_list_pool *prot_list_create_custom_pool(size_t refill,
++						    unsigned short align_order)
++{
++	struct prot_list_pool *pool;
++
++	pool = kzalloc(sizeof(struct prot_list_pool), GFP_KERNEL);
++	if (WARN(!pool, "Could not allocate pool meta data."))
++		return NULL;
++	pmalloc_init_custom_pool(&pool->pool, refill, align_order,
++				 PMALLOC_AUTO_RW);
++	return pool;
++}
++EXPORT_SYMBOL(prot_list_create_custom_pool);
+diff --git a/mm/Kconfig b/mm/Kconfig
+index e14c01513bfd..8e48af4e2dd2 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -753,3 +753,9 @@ config GUP_BENCHMARK
+ 	  performance of get_user_pages_fast().
+ 
+ 	  See tools/testing/selftests/vm/gup_benchmark.c
++
++config PROTECTABLE_MEMORY
++    bool
++    depends on MMU
++    depends on ARCH_HAS_SET_MEMORY
++    default y
+diff --git a/mm/Kconfig.debug b/mm/Kconfig.debug
+index e5e606ee5f71..15ecaa2ae96a 100644
+--- a/mm/Kconfig.debug
++++ b/mm/Kconfig.debug
+@@ -94,3 +94,13 @@ config DEBUG_RODATA_TEST
+     depends on STRICT_KERNEL_RWX
+     ---help---
+       This option enables a testcase for the setting rodata read-only.
++
++config TEST_PROTECTABLE_MEMORY
++	tristate "Run self test for pmalloc memory allocator"
++        depends on MMU
++	depends on ARCH_HAS_SET_MEMORY
++	select PROTECTABLE_MEMORY
++	default n
++	help
++	  Tries to verify that pmalloc works correctly and that the memory
++	  is effectively protected.
+diff --git a/mm/Makefile b/mm/Makefile
+index b4e54a9ae9c5..802cba37013b 100644
+--- a/mm/Makefile
++++ b/mm/Makefile
+@@ -65,6 +65,8 @@ obj-$(CONFIG_SPARSEMEM)	+= sparse.o
+ obj-$(CONFIG_SPARSEMEM_VMEMMAP) += sparse-vmemmap.o
+ obj-$(CONFIG_SLOB) += slob.o
+ obj-$(CONFIG_MMU_NOTIFIER) += mmu_notifier.o
++obj-$(CONFIG_PROTECTABLE_MEMORY) += pmalloc.o
++obj-$(CONFIG_TEST_PROTECTABLE_MEMORY) += test_pmalloc.o
+ obj-$(CONFIG_KSM) += ksm.o
+ obj-$(CONFIG_PAGE_POISONING) += page_poison.o
+ obj-$(CONFIG_SLAB) += slab.o
+diff --git a/mm/pmalloc.c b/mm/pmalloc.c
+new file mode 100644
+index 000000000000..d74aea870fe4
+--- /dev/null
++++ b/mm/pmalloc.c
+@@ -0,0 +1,219 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * pmalloc.c: Protectable Memory Allocator
++ *
++ * (C) Copyright 2017-2018 Huawei Technologies Co. Ltd.
++ * Author: Igor Stoppa <igor.stoppa@huawei.com>
++ */
++
++#include <linux/printk.h>
++#include <linux/init.h>
++#include <linux/mm.h>
++#include <linux/vmalloc.h>
++#include <linux/kernel.h>
++#include <linux/log2.h>
++#include <linux/slab.h>
++#include <linux/set_memory.h>
++#include <linux/bug.h>
++#include <linux/mutex.h>
++#include <linux/llist.h>
++#include <asm/cacheflush.h>
++#include <asm/page.h>
++
++#include <linux/pmalloc.h>
++
++static LIST_HEAD(pools_list);
++static DEFINE_MUTEX(pools_mutex);
++
++#define MAX_ALIGN_ORDER (ilog2(sizeof(void *)))
++#define DEFAULT_REFILL_SIZE PAGE_SIZE
++
++/**
++ * pmalloc_init_custom_pool() - initialize a protectable memory pool
++ * @pool: the pointer to the struct pmalloc_pool to initialize
++ * @refill: the minimum size to allocate when in need of more memory.
++ *          It will be rounded up to a multiple of PAGE_SIZE
++ *          The value of 0 gives the default amount of PAGE_SIZE.
++ * @align_order: log2 of the alignment to use when allocating memory
++ *               Negative values give ARCH_KMALLOC_MINALIGN
++ * @mode: can the data be altered after protection
++ *
++ * Initializes an empty memory pool, for allocation of protectable
++ * memory. Memory will be allocated upon request (through pmalloc).
++ */
++void pmalloc_init_custom_pool(struct pmalloc_pool *pool, size_t refill,
++			      unsigned short align_order, uint8_t mode)
++{
++	pool->refill = refill ? PAGE_ALIGN(refill) : DEFAULT_REFILL_SIZE;
++	pool->mode = mode;
++	pool->align = 1UL << align_order;
++	mutex_init(&pool->mutex);
++	mutex_lock(&pools_mutex);
++	list_add(&pool->pool_node, &pools_list);
++	mutex_unlock(&pools_mutex);
++}
++EXPORT_SYMBOL(pmalloc_init_custom_pool);
++
++/**
++ * pmalloc_create_custom_pool() - create a new protectable memory pool
++ * @refill: the minimum size to allocate when in need of more memory.
++ *          It will be rounded up to a multiple of PAGE_SIZE
++ *          The value of 0 gives the default amount of PAGE_SIZE.
++ * @align_order: log2 of the alignment to use when allocating memory
++ *               Negative values give ARCH_KMALLOC_MINALIGN
++ * @mode: can the data be altered after protection
++ *
++ * Creates a new (empty) memory pool for allocation of protectable
++ * memory. Memory will be allocated upon request (through pmalloc).
++ *
++ * Return:
++ * * pointer to the new pool	- success
++ * * NULL			- error
++ */
++struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
++						unsigned short align_order,
++						uint8_t mode)
++{
++	struct pmalloc_pool *pool;
++
++	pool = kzalloc(sizeof(struct pmalloc_pool), GFP_KERNEL);
++	if (WARN(!pool, "Could not allocate pool meta data."))
++		return NULL;
++	pmalloc_init_custom_pool(pool, refill, align_order, mode);
++	return pool;
++}
++EXPORT_SYMBOL(pmalloc_create_custom_pool);
++
++static int grow(struct pmalloc_pool *pool, size_t min_size)
++{
++	void *addr;
++	struct vmap_area *new_area;
++	unsigned long size;
++	uint32_t tag_mask;
++
++	size = (min_size > pool->refill) ? min_size : pool->refill;
++	addr = vmalloc(size);
++	if (WARN(!addr, "Failed to allocate %zd bytes", PAGE_ALIGN(size)))
++		return -ENOMEM;
++
++	new_area = find_vmap_area((unsigned long)addr);
++	tag_mask = VM_PMALLOC;
++	if (pool->mode & PMALLOC_RW)
++		tag_mask |= VM_PMALLOC_REWRITABLE;
++	__tag_area(new_area, tag_mask);
++	if (pool->mode == PMALLOC_AUTO_RW)
++		__protect_area(new_area);
++	if (pool->mode == PMALLOC_AUTO_RO) {
++		struct vmap_area *old_area;
++
++		old_area = container_of(pool->vm_areas.first,
++					struct vmap_area, area_list);
++		__protect_area(old_area);
++	}
++	pool->offset = __get_area_pages_size(new_area);
++	llist_add(&new_area->area_list, &pool->vm_areas);
++	return 0;
++}
++
++/**
++ * pmalloc() - allocate protectable memory from a pool
++ * @pool: handle to the pool to be used for memory allocation
++ * @size: amount of memory (in bytes) requested
++ *
++ * Allocates memory from a pool.
++ * If needed, the pool will automatically allocate enough memory to
++ * either satisfy the request or meet the "refill" parameter received
++ * upon creation.
++ * New allocation can happen also if the current memory in the pool is
++ * already write protected.
++ *
++ * Return:
++ * * pointer to the memory requested	- success
++ * * NULL				- error
++ */
++void *pmalloc(struct pmalloc_pool *pool, size_t size)
++{
++	void *retval = NULL;
++
++	mutex_lock(&pool->mutex);
++	if (unlikely(__space_needed(pool, size)) &&
++	    unlikely(grow(pool, size)))
++			goto out;
++	pool->offset = round_down(pool->offset - size, pool->align);
++	retval = (void *)(__current_area(pool)->va_start + pool->offset);
++out:
++	mutex_unlock(&pool->mutex);
++	return retval;
++}
++EXPORT_SYMBOL(pmalloc);
++
++/**
++ * pmalloc_protect_pool() - write-protects the memory in the pool
++ * @pool: the pool associated to the memory to write-protect
++ *
++ * Write-protects all the memory areas currently assigned to the pool
++ * that are still unprotected.
++ * This does not prevent further allocation of additional memory, that
++ * can be initialized and protected.
++ * The catch is that protecting a pool will make unavailable whatever
++ * free memory it might still contain.
++ * Successive allocations will grab more free pages.
++ */
++void pmalloc_protect_pool(struct pmalloc_pool *pool)
++{
++	struct vmap_area *area;
++
++	mutex_lock(&pool->mutex);
++	llist_for_each_entry(area, pool->vm_areas.first, area_list)
++		__protect_area(area);
++	mutex_unlock(&pool->mutex);
++}
++EXPORT_SYMBOL(pmalloc_protect_pool);
++
++
++/**
++ * pmalloc_make_pool_ro() - drops rare-write permission from a pool
++ * @pool: the pool associated to the memory to make ro
++ *
++ * Drops the possibility to perform controlled writes from both the pool
++ * metadata and all the vm_area structures associated to the pool.
++ */
++void pmalloc_make_pool_ro(struct pmalloc_pool *pool)
++{
++	struct vmap_area *area;
++
++	mutex_lock(&pool->mutex);
++	pool->mode = false;
++	llist_for_each_entry(area, pool->vm_areas.first, area_list)
++		__protect_area(area);
++	mutex_unlock(&pool->mutex);
++}
++EXPORT_SYMBOL(pmalloc_make_pool_ro);
++
++/**
++ * pmalloc_destroy_pool() - destroys a pool and all the associated memory
++ * @pool: the pool to destroy
++ *
++ * All the memory associated to the pool will be freed, including the
++ * metadata used for the pool.
++ */
++void pmalloc_destroy_pool(struct pmalloc_pool *pool)
++{
++	struct vmap_area *area;
++	struct llist_node *cursor;
++	struct llist_node *tmp;
++
++	mutex_lock(&pools_mutex);
++	list_del(&pool->pool_node);
++	mutex_unlock(&pools_mutex);
++
++	cursor = pool->vm_areas.first;
++	kfree(pool);
++	while (cursor) {            /* iteration over llist */
++		tmp = cursor;
++		cursor = cursor->next;
++		area = llist_entry(tmp, struct vmap_area, area_list);
++		__destroy_area(area);
++	}
++}
++EXPORT_SYMBOL(pmalloc_destroy_pool);
+diff --git a/mm/test_pmalloc.c b/mm/test_pmalloc.c
+new file mode 100644
+index 000000000000..ae69c92d011b
+--- /dev/null
++++ b/mm/test_pmalloc.c
+@@ -0,0 +1,283 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * test_pmalloc.c
++ *
++ * (C) Copyright 2018 Huawei Technologies Co. Ltd.
++ * Author: Igor Stoppa <igor.stoppa@huawei.com>
++ */
++
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/mm.h>
++#include <linux/bug.h>
++#include <linux/pmalloc.h>
++#include <linux/prot_list.h>
++
++#define SIZE_1 (PAGE_SIZE * 3)
++#define SIZE_2 1000
++
++/* wrapper for is_pmalloc_object() with messages */
++static inline bool validate_alloc(bool expected, void *addr,
++				  unsigned long size)
++{
++	bool test;
++
++	test = is_pmalloc_object(addr, size) > 0;
++	pr_notice("must be %s: %s",
++		  expected ? "ok" : "no", test ? "ok" : "no");
++	return test == expected;
++}
++
++
++#define is_alloc_ok(variable, size)	\
++	validate_alloc(true, variable, size)
++
++
++#define is_alloc_no(variable, size)	\
++	validate_alloc(false, variable, size)
++
++/* tests the basic life-cycle of a pool */
++static bool create_and_destroy_pool(void)
++{
++	static struct pmalloc_pool *pool;
++
++	pr_notice("Testing pool creation and destruction capability");
++
++	pool = pmalloc_create_pool(PMALLOC_RO);
++	if (WARN(!pool, "Cannot allocate memory for pmalloc selftest."))
++		return false;
++	pmalloc_destroy_pool(pool);
++	return true;
++}
++
++
++/*  verifies that it's possible to allocate from the pool */
++static bool test_alloc(void)
++{
++	static struct pmalloc_pool *pool;
++	static void *p;
++
++	pr_notice("Testing allocation capability");
++	pool = pmalloc_create_pool(PMALLOC_RO);
++	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
++		return false;
++	p = pmalloc(pool,  SIZE_1 - 1);
++	pmalloc_protect_pool(pool);
++	pmalloc_destroy_pool(pool);
++	if (WARN(!p, "Failed to allocate memory from the pool"))
++		return false;
++	return true;
++}
++
++
++/* tests the identification of pmalloc ranges */
++static bool test_is_pmalloc_object(void)
++{
++	struct pmalloc_pool *pool;
++	void *pmalloc_p;
++	void *vmalloc_p;
++	bool retval = false;
++
++	pr_notice("Test correctness of is_pmalloc_object()");
++
++	vmalloc_p = vmalloc(SIZE_1);
++	if (WARN(!vmalloc_p,
++		 "Unable to allocate memory for pmalloc selftest."))
++		return false;
++	pool = pmalloc_create_pool(PMALLOC_RO);
++	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
++		return false;
++	pmalloc_p = pmalloc(pool,  SIZE_1 - 1);
++	if (WARN(!pmalloc_p, "Failed to allocate memory from the pool"))
++		goto error;
++	if (WARN_ON(unlikely(!is_alloc_ok(pmalloc_p, 10))) ||
++	    WARN_ON(unlikely(!is_alloc_ok(pmalloc_p, SIZE_1))) ||
++	    WARN_ON(unlikely(!is_alloc_ok(pmalloc_p, PAGE_SIZE))) ||
++	    WARN_ON(unlikely(!is_alloc_no(pmalloc_p, SIZE_1 + 1))) ||
++	    WARN_ON(unlikely(!is_alloc_no(vmalloc_p, 10))))
++		goto error;
++	retval = true;
++error:
++	pmalloc_protect_pool(pool);
++	pmalloc_destroy_pool(pool);
++	vfree(vmalloc_p);
++	return retval;
++}
++
++#define REGION_SIZE (PAGE_SIZE / 4)
++#define REGION_NUMBERS 12
++static inline void fill_region(char *addr, char c)
++{
++	size_t i;
++
++	for (i = 0; i < REGION_SIZE - 1; i++)
++		addr[i] = c;
++	addr[i] = '\0';
++}
++
++static inline void init_regions(char *array)
++{
++	size_t i;
++
++	for (i = 0; i < REGION_NUMBERS; i++)
++		fill_region(array + REGION_SIZE * i, i + 'A');
++}
++
++static inline void show_regions(char *array)
++{
++	size_t i;
++
++	for (i = 0; i < REGION_NUMBERS; i++)
++		pr_info("%s", array + REGION_SIZE * i);
++}
++
++static inline void init_big_injection(char *big_injection)
++{
++	size_t i;
++
++	for (i = 0; i < PAGE_SIZE * 3; i++)
++		big_injection[i] = 'X';
++}
++
++/* Verify rewritable feature. */
++static int test_rare_write(void)
++{
++	struct pmalloc_pool *pool;
++	char *array;
++	char injection[] = "123456789";
++	unsigned short size = sizeof(injection);
++	char *big_injection;
++
++
++	pr_notice("Test pmalloc_rare_write()");
++	pool = pmalloc_create_pool(PMALLOC_RW);
++	array = pzalloc(pool, REGION_SIZE * REGION_NUMBERS);
++	init_regions(array);
++	pmalloc_protect_pool(pool);
++	pr_info("------------------------------------------------------");
++	pmalloc_rare_write(pool, array, injection, size);
++	pmalloc_rare_write(pool, array + REGION_SIZE, injection, size);
++	pmalloc_rare_write(pool,
++			   array + 5 * REGION_SIZE / 2 - size / 2,
++			   injection, size);
++	pmalloc_rare_write(pool, array + 3 * REGION_SIZE - size / 2,
++			   injection, size);
++	show_regions(array);
++	pmalloc_destroy_pool(pool);
++	pr_info("------------------------------------------------------");
++	pool = pmalloc_create_pool(PMALLOC_RW);
++	array = pzalloc(pool, REGION_SIZE * REGION_NUMBERS);
++	init_regions(array);
++	pmalloc_protect_pool(pool);
++	big_injection = vmalloc(PAGE_SIZE * 3);
++	init_big_injection(big_injection);
++	pmalloc_rare_write(pool, array + REGION_SIZE / 2, big_injection,
++			   PAGE_SIZE * 2);
++	show_regions(array);
++	pr_info("------------------------------------------------------");
++	return 0;
++}
++
++#include <linux/sched.h>
++#include <linux/thread_info.h>
++
++static int victim __rare_write_after_init = 23;
++#include <linux/rare_write.h>
++
++
++int test_static_rare_write(void)
++{
++	int src = 11;
++
++	pr_notice("QQQQQQ Victim is %d", victim);
++	rare_write(&victim, &src);
++	pr_info("QQQQQQ start: 0x%016lx", (unsigned long)&__start_rare_write_after_init);
++	pr_info("QQQQQQ victim: 0x%016lx", (unsigned long)&victim);
++	pr_info("QQQQQQ end: 0x%016lx", (unsigned long)&__end_rare_write_after_init);
++	pr_notice("QQQQQQ Victim is %d", victim);
++}
++EXPORT_SYMBOL(test_static_rare_write);
++
++struct test_data {
++	int data_int;
++	struct prot_head list;
++	unsigned long long data_ulong;
++};
++
++static int test_prot_list(void)
++{
++	struct prot_list_pool *pool;
++	struct prot_head *head;
++	struct prot_head *cursor;
++	struct test_data data;
++	int i;
++
++	/* Create a pool for the protectable list. */
++	pool = prot_list_create_pool();
++	if (WARN(!pool, "could not create pool"))
++		return -ENOMEM;
++
++	head = PROT_LIST_HEAD(pool);
++	for (i = 0; i < 100; i++) {
++		data.data_int = i;
++		data.data_ulong = i * i;
++		if (i % 2)
++			prot_list_append(pool, head, &data, list);
++		else
++			prot_list_prepend(pool, head, &data, list);
++	}
++	for (cursor = head->next; cursor != head; cursor = cursor->next) {
++		struct test_data *data;
++
++		data = container_of(cursor, struct test_data, list);
++
++		pr_info("cursor: 0x%08lx  data_int: %02d ",
++			(unsigned long)cursor, data->data_int);
++	}
++/*	{
++		struct test_data *data;
++
++		data = container_of(cursor->next, struct test_data, list);
++		data->data_int += 5;
++	}*/
++	for (cursor = head->prev; cursor != head; cursor = cursor->prev) {
++		struct test_data *data;
++
++		data = container_of(cursor, struct test_data, list);
++
++		pr_info("cursor: 0x%08lx  data_int: %02d ",
++			(unsigned long)cursor, data->data_int);
++	}
++
++	return 0;
++}
++
++/**
++ * test_pmalloc()  -main entry point for running the test cases
++ */
++
++static int __init test_pmalloc_init_module(void)
++{
++	pr_notice("pmalloc-selftest");
++
++	if (unlikely(!(create_and_destroy_pool() &&
++		       test_alloc() &&
++		       test_is_pmalloc_object())))
++		return -1;
++	test_rare_write();
++	test_prot_list();
++//	test_static_rare_write();
++	return 0;
++}
++
++module_init(test_pmalloc_init_module);
++
++static void __exit test_pmalloc_cleanup_module(void)
++{
++}
++
++module_exit(test_pmalloc_cleanup_module);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Igor Stoppa <igor.stoppa@huawei.com>");
++MODULE_DESCRIPTION("Test module for pmalloc.");
+diff --git a/mm/usercopy.c b/mm/usercopy.c
+index e9e9325f7638..c4aa7ced36b7 100644
+--- a/mm/usercopy.c
++++ b/mm/usercopy.c
+@@ -20,8 +20,13 @@
+ #include <linux/sched/task.h>
+ #include <linux/sched/task_stack.h>
+ #include <linux/thread_info.h>
++#include <linux/init.h>
++#include <linux/debugfs.h>
++#include <linux/pmalloc.h>
++#include <linux/sched/clock.h>
+ #include <asm/sections.h>
+ 
++
+ /*
+  * Checks if a given pointer and length is contained by the current
+  * stack frame (if possible).
+@@ -277,5 +282,8 @@ void __check_object_size(const void *ptr, unsigned long n, bool to_user)
+ 
+ 	/* Check for object in kernel to avoid text exposure. */
+ 	check_kernel_text_object((const unsigned long)ptr, n, to_user);
++
++	/* Check if object is from a pmalloc chunk. */
++	check_pmalloc_object(ptr, n, to_user);
+ }
+ EXPORT_SYMBOL(__check_object_size);
+diff --git a/mm/vmalloc.c b/mm/vmalloc.c
+index 1bb2233bb262..da9cc9cd8b52 100644
+--- a/mm/vmalloc.c
++++ b/mm/vmalloc.c
+@@ -759,7 +759,7 @@ static void free_unmap_vmap_area(struct vmap_area *va)
+ 	free_vmap_area_noflush(va);
+ }
+ 
+-static struct vmap_area *find_vmap_area(unsigned long addr)
++struct vmap_area *find_vmap_area(unsigned long addr)
+ {
+ 	struct vmap_area *va;
