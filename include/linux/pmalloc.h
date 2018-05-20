@@ -1,0 +1,635 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * pmalloc.h: Header for Protectable Memory Allocator
+ *
+ * (C) Copyright 2017-18 Huawei Technologies Co. Ltd.
+ * Author: Igor Stoppa <igor.stoppa@huawei.com>
+ */
+
+#ifndef _LINUX_PMALLOC_H
+#define _LINUX_PMALLOC_H
+
+#ifndef CONFIG_PROTECTABLE_MEMORY
+
+/**
+ * check_pmalloc_object - hardened usercopy stub if pmalloc is unavailable
+ * @ptr: the beginning of the memory to check
+ * @n: the size of the memory to check
+ * @to_user: copy to userspace or from userspace
+ *
+ * If pmalloc is disabled, there is nothing to check.
+ */
+static inline
+void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
+{
+}
+
+#else
+
+
+#ifdef pr_fmt
+#undef pr_fmt
+#endif
+
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
+#include <linux/rare_write.h>
+/*
+ * Library for dynamic allocation of pools of protectable memory.
+ * A pool is a single linked list of vmap_area structures.
+ * Whenever a pool is protected, all the areas it contains at that point
+ * are write protected.
+ * More areas can be added and protected, in the same way.
+ * Memory in a pool cannot be individually unprotected, but the pool can
+ * be destroyed.
+ * Upon destruction of a certain pool, all the related memory is released,
+ * including its metadata.
+ *
+ * Depending on the type of protection that was chosen, the memory can be
+ * either completely read-only or it can support rare-writes.
+ *
+ * The rare-write mechanism is intended to provide no read overhead and
+ * still some form of protection, while a selected area is modified.
+ * This will incur into a penalty that is partially depending on the
+ * specific architecture, but in general is the price to pay for limiting
+ * the attack surface, while the change takes place.
+ *
+ * For additional safety, it is not possible to have in the same pool both
+ * rare-write and unmodifiable memory.
+ */
+
+#include <linux/set_memory.h>
+#include <linux/mm.h>
+#include <linux/vmalloc.h>
+#include <linux/string.h>
+#include <linux/slab.h>
+#include <linux/mutex.h>
+#include <linux/list.h>
+#include <linux/llist.h>
+
+#define PMALLOC_REFILL_DEFAULT (0)
+#define PMALLOC_DEFAULT_REFILL_SIZE PAGE_SIZE
+#define PMALLOC_ALIGN_ORDER_DEFAULT ilog2(ARCH_KMALLOC_MINALIGN)
+
+
+/*
+ * A pool can be set either for rare-write or read-only mode.
+ * In both cases, the protection of its content can be managed either
+ * manually or automatically.
+ *
+ * AUTO_RO/AUTO_RW mean that every vmap area in a pool is automatically
+ * protected, whenever it becomes full or anyway unsuitable for the next
+ * allocation at hand, because there is not enough free space left.
+ * To be used safely, data can be directly written-to exclusively to the
+ * latest allocation. Allocating a new chunk forfaits the possibility of
+ * writing safely to any previous allocation.
+ * If the pool is in rare-write mode, it's still possible to alter its
+ * data, as long as it's done through functions of the rare-write family.
+ */
+#define PMALLOC_POOL_RO			0x00
+#define PMALLOC_POOL_RW			0x01
+#define PMALLOC_POOL_AUTO_PROTECT	0x02
+#define PMALLOC_POOL_START_PROTECTED	0x04
+#define PMALLOC_POOL_MASK		(PMALLOC_POOL_RW | \
+					 PMALLOC_POOL_AUTO_PROTECT | \
+					 PMALLOC_POOL_START_PROTECTED)
+#define PMALLOC_POOL_AUTO_RO		(PMALLOC_POOL_AUTO_PROTECT | \
+					 PMALLOC_POOL_RO)
+#define PMALLOC_POOL_AUTO_RW		(PMALLOC_POOL_AUTO_PROTECT | \
+					 PMALLOC_POOL_RW)
+#define PMALLOC_POOL_START_RW		(PMALLOC_POOL_AUTO_RW | \
+					 PMALLOC_POOL_START_PROTECTED)
+
+#define VM_PMALLOC_MASK \
+	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
+
+#define VM_PMALLOC_PROTECTED_MASK \
+	(VM_PMALLOC | VM_PMALLOC_PROTECTED)
+#define VM_PMALLOC_READ_ONLY_MASK VM_PMALLOC_PROTECTED_MASK
+
+#define VM_PMALLOC_REWRITABLE_MASK \
+	(VM_PMALLOC | VM_PMALLOC_REWRITABLE)
+#define VM_PMALLOC_READ_WRITE_MASK VM_PMALLOC_REWRITABLE_MASK
+
+#define VM_PMALLOC_RARE_WRITE_MASK \
+	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
+
+
+
+struct pmalloc_pool {
+	struct mutex mutex;
+	struct list_head pool_node;
+	struct llist_head vm_areas;
+	size_t align;
+	size_t refill;
+	size_t offset;
+	uint8_t mode;
+};
+
+
+/*
+ * Helper functions, not part of the API.
+ * They are implemented as inlined functions, instead of macros, for
+ * additional type-checking, however they are not meant to be called
+ * directly by pmalloc users.
+ * Some of them will rise warnings in case they find a configuration of
+ * protections that is either unusual or unexpected, however they will
+ * continue with the execution wherever it doesn't cause problems.
+ */
+static __always_inline unsigned long __area_flags(struct vmap_area *area)
+{
+	return area->vm->flags & VM_PMALLOC_MASK;
+}
+
+static __always_inline
+void __tag_area(struct vmap_area *area, uint32_t mask)
+{
+	area->vm->flags |= (mask & VM_PMALLOC_MASK);
+}
+
+static __always_inline void __untag_area(struct vmap_area *area)
+{
+	area->vm->flags &= ~VM_PMALLOC_MASK;
+}
+
+static __always_inline
+struct vmap_area *__current_area(struct pmalloc_pool *pool)
+{
+	return llist_entry(pool->vm_areas.first, struct vmap_area,
+			   area_list);
+}
+
+static __always_inline
+bool __area_matches_mask(struct vmap_area *area, unsigned long mask)
+{
+	return (area->vm->flags & VM_PMALLOC_MASK) == mask;
+}
+
+static __always_inline bool __is_area_protected(struct vmap_area *area)
+{
+	return (__area_flags(area) & VM_PMALLOC_PROTECTED_MASK) ==
+		VM_PMALLOC_PROTECTED_MASK;
+}
+
+static __always_inline bool __is_area_rewritable(struct vmap_area *area)
+{
+	return (__area_flags(area) & VM_PMALLOC_REWRITABLE_MASK) ==
+		VM_PMALLOC_REWRITABLE_MASK;
+}
+
+/* The area size backed by pages, without the canary bird. */
+static __always_inline size_t __get_area_pages_size(struct vmap_area *area)
+{
+	return area->vm->nr_pages * PAGE_SIZE;
+}
+
+static __always_inline size_t __get_area_pages_end(struct vmap_area *area)
+{
+	return area->va_start + __get_area_pages_size(area);
+}
+
+static __always_inline
+bool __area_contains_range(struct vmap_area *area, const void *addr,
+			   size_t n_bytes)
+{
+	size_t area_end = __get_area_pages_end(area);
+	size_t range_start = (size_t)addr;
+	size_t range_end = range_start + n_bytes;
+
+	return (n_bytes > 0) && (area->va_start <= range_start) &&
+	       (range_end <= area_end);
+}
+
+static __always_inline
+struct vmap_area *__pool_get_area(struct pmalloc_pool *pool,
+				  const void *addr, size_t n_bytes)
+{
+	struct vmap_area *area;
+
+	if (unlikely(!is_vmalloc_addr(addr)))
+		return NULL;
+
+	llist_for_each_entry(area, pool->vm_areas.first, area_list)
+		if (unlikely(__area_contains_range(area, addr, n_bytes))) {
+			if (WARN(!(area->vm->flags & VM_PMALLOC),
+				 "area in pool not tagged as VM_PMALLOC"))
+				return NULL;
+			return area;
+		}
+	return NULL;
+}
+
+enum {
+	NOT_PMALLOC_OBJECT,
+	BAD_PMALLOC_OBJECT,
+	GOOD_PMALLOC_OBJECT
+};
+
+static inline int __is_pmalloc_object(const void *ptr, const size_t n)
+{
+	struct vm_struct *area;
+	struct page *page;
+	size_t area_start;
+	size_t range_start = (size_t)ptr;
+	size_t range_end = range_start + n;
+	size_t area_end;
+
+	if (likely(!is_vmalloc_addr(ptr)))
+		return NOT_PMALLOC_OBJECT;
+
+	page = vmalloc_to_page(ptr);
+	if (unlikely(!page))
+		return NOT_PMALLOC_OBJECT;
+
+	area = page->area;
+	if (!(area && (area->flags & VM_PMALLOC)))
+		return NOT_PMALLOC_OBJECT;
+
+	area_start = (size_t)area->addr;
+	area_end = area_start + area->nr_pages * PAGE_SIZE;
+
+	if ((area_start <= range_start) &&
+	    (range_start < range_end) &&
+	    (range_end <= area_end))
+		return GOOD_PMALLOC_OBJECT;
+
+	return BAD_PMALLOC_OBJECT;
+}
+
+/*
+ * ---------------------------- Pmalloc API ----------------------------
+ */
+
+void __noreturn usercopy_abort(const char *name, const char *detail,
+			       bool to_user, unsigned long offset,
+			       unsigned long len);
+
+/**
+ * check_pmalloc_object - helper for hardened usercopy
+ * @ptr: the beginning of the memory to check
+ * @n: the size of the memory to check
+ * @to_user: copy to userspace or from userspace
+ *
+ * If the check is ok, it will fall-through, otherwise it will abort.
+ * The function is inlined, to minimize the performance impact of the
+ * extra check that can end up on a hot path.
+ * Non-exhaustive micro benchmarking with QEMU x86_64 shows a reduction of
+ * the time spent in this fragment by 60%, when inlined.
+ */
+static inline
+void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
+{
+	int retv;
+
+	retv = __is_pmalloc_object(ptr, n);
+	if (unlikely(retv != NOT_PMALLOC_OBJECT)) {
+		if (unlikely(!to_user))
+			usercopy_abort("pmalloc",
+				       "writing to pmalloc object", to_user,
+				       (const unsigned long)ptr, n);
+		if (unlikely(retv == BAD_PMALLOC_OBJECT))
+			usercopy_abort("pmalloc",
+				       "invalid pmalloc object", to_user,
+				       (const unsigned long)ptr, n);
+	}
+}
+
+void pmalloc_init_custom_pool(struct pmalloc_pool *pool, size_t refill,
+			      short align_order, uint8_t mode);
+
+struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
+						short align_order,
+						uint8_t mode);
+
+/**
+ * pmalloc_create_pool() - create a protectable memory pool
+ * @mode: can the data be altered after protection
+ *
+ * Shorthand for pmalloc_create_custom_pool() with default argument:
+ * * refill is set to PMALLOC_REFILL_DEFAULT
+ * * align_order is set to PMALLOC_ALIGN_ORDER_DEFAULT
+ *
+ * Returns:
+ * * pointer to the new pool	- success
+ * * NULL			- error
+ */
+static inline struct pmalloc_pool *pmalloc_create_pool(uint8_t mode)
+{
+	return pmalloc_create_custom_pool(PMALLOC_REFILL_DEFAULT,
+					  PMALLOC_ALIGN_ORDER_DEFAULT,
+					  mode);
+}
+
+void *pmalloc(struct pmalloc_pool *pool, size_t size);
+
+/**
+ * pzalloc() - zero-initialized version of pmalloc()
+ * @pool: handle to the pool to be used for memory allocation
+ * @size: amount of memory (in bytes) requested
+ *
+ * Executes pmalloc(), initializing the memory requested to 0, before
+ * returning its address.
+ *
+ * Return:
+ * * pointer to the memory requested	- success
+ * * NULL				- error
+ */
+static inline void *pzalloc(struct pmalloc_pool *pool, size_t size)
+{
+	void *ptr = pmalloc(pool, size);
+
+	if (likely(ptr))
+		memset(ptr, 0, size);
+	return ptr;
+}
+
+/**
+ * pmalloc_array() - array version of pmalloc()
+ * @pool: handle to the pool to be used for memory allocation
+ * @n: number of elements in the array
+ * @size: amount of memory (in bytes) requested for each element
+ *
+ * Executes pmalloc(), on an array.
+ *
+ * Return:
+ * * the pmalloc result	- success
+ * * NULL		- error
+ */
+
+static inline
+void *pmalloc_array(struct pmalloc_pool *pool, size_t n, size_t size)
+{
+	size_t total_size = n * size;
+
+	if (unlikely(!(n && (total_size / n == size))))
+		return NULL;
+	return pmalloc(pool, n * size);
+}
+
+/**
+ * pcalloc() - array version of pzalloc()
+ * @pool: handle to the pool to be used for memory allocation
+ * @n: number of elements in the array
+ * @size: amount of memory (in bytes) requested for each element
+ *
+ * Executes pzalloc(), on an array.
+ *
+ * Return:
+ * * the pmalloc result	- success
+ * * NULL		- error
+ */
+static inline
+void *pcalloc(struct pmalloc_pool *pool, size_t n, size_t size)
+{
+	size_t total_size = n * size;
+
+	if (unlikely(!(n && (total_size / n == size))))
+		return NULL;
+	return pzalloc(pool, n * size);
+}
+
+/**
+ * pstrdup() - duplicate a string, using pmalloc()
+ * @pool: handle to the pool to be used for memory allocation
+ * @s: string to duplicate
+ *
+ * Generates a copy of the given string, allocating sufficient memory
+ * from the given pmalloc pool.
+ *
+ * Return:
+ * * pointer to the replica	- success
+ * * NULL			- error
+ */
+static inline char *pstrdup(struct pmalloc_pool *pool, const char *s)
+{
+	size_t len;
+	char *buf;
+
+	len = strlen(s) + 1;
+	buf = pmalloc(pool, len);
+	if (likely(buf))
+		strncpy(buf, s, len);
+	return buf;
+}
+
+/*
+ * The following sanitation is meant to make life harder for attempts at
+ * using ROP/JOP to call this function against areas that are not supposed
+ * to be modifiable.
+ */
+static __always_inline
+bool __check_rare_write(struct pmalloc_pool *pool, const void *dst,
+			const void *src, size_t n_bytes)
+{
+	struct vmap_area *area;
+
+	area = __pool_get_area(pool, dst, n_bytes);
+	return likely(area && __is_area_rewritable(area));
+
+}
+
+static __always_inline
+bool __pmalloc_rare_write(struct pmalloc_pool *pool, const void *dst,
+			  const void *src, size_t n_bytes)
+{
+	if (WARN(!__check_rare_write(pool, dst, src, n_bytes),
+		 "Incorrect destination."))
+		return false;
+	return __raw_rare_write(dst, src, RARE_WRITE_VMALLOC_ADDR, n_bytes);
+}
+
+/**
+ * pmalloc_rare_write_char - alters a variable of type char
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
+static __always_inline
+bool pmalloc_rare_write_char(struct pmalloc_pool *pool, const char *dst,
+			     const char val)
+{
+	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
+}
+
+/**
+ * pmalloc_rare_write_short - alters a short
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
+static __always_inline
+bool pmalloc_rare_write_short(struct pmalloc_pool *pool, const short *dst,
+			      const short val)
+{
+	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
+}
+
+/**
+ * pmalloc_rare_write_ushort - alters an unsigned short
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
+static __always_inline
+bool pmalloc_rare_write_ushort(struct pmalloc_pool *pool,
+			       const unsigned short *dst,
+			       const unsigned short val)
+{
+	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
+}
+
+/**
+ * pmalloc_rare_write_int - alters an int
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
+static __always_inline
+bool pmalloc_rare_write_int(struct pmalloc_pool *pool, const int *dst,
+			    const int val)
+{
+	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
+}
+
+/**
+ * pmalloc_rare_write_uint - alters an unsigned int
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
+static __always_inline
+bool pmalloc_rare_write_uint(struct pmalloc_pool *pool,
+			     const unsigned int *dst,
+			     const unsigned int val)
+{
+	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
+}
+
+/**
+ * pmalloc_rare_write_long - alters a long
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
+static __always_inline
+bool pmalloc_rare_write_long(struct pmalloc_pool *pool, const long *dst,
+			     const long val)
+{
+	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
+}
+
+/**
+ * pmalloc_rare_write_ulong - alters an unsigned long
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
+static __always_inline
+bool pmalloc_rare_write_ulong(struct pmalloc_pool *pool,
+			      const unsigned long *dst,
+			      const unsigned long val)
+{
+	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
+}
+
+/**
+ * pmalloc_rare_write_long long - alters a long long
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
+static __always_inline
+bool pmalloc_rare_write_longlong(struct pmalloc_pool *pool,
+				 const long long *dst,
+				 const long long val)
+{
+	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
+}
+
+/**
+ * pmalloc_rare_write_ulonglong - alters an unsigned long long
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
+static __always_inline
+bool pmalloc_rare_write_ulonglong(struct pmalloc_pool *pool,
+				  const unsigned long long *dst,
+				  const unsigned long long val)
+{
+	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
+}
+
+/**
+ * pmalloc_rare_write_ptr - alters a pointer
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
+static __always_inline
+bool pmalloc_rare_write_ptr(struct pmalloc_pool *pool, const void *dst,
+			    const void *val)
+{
+	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
+}
+
+/**
+ * pmalloc_rare_write_array() - alters the content of a rewritable pool
+ * @pool: the pool associated to the memory to write-protect
+ * @dst: where to write the new data
+ * @src: the location of the data to replicate into the pool
+ * @n_bytes: the size of the region to modify
+ *
+ * The rare-write functionality is fully implemented as __always_inline,
+ * to prevent having an internal function call that is capable of modifying
+ * write protected memory.
+ * Fully inlining the function allows the compiler to optimize away its
+ * interface, making it harder for an attacker to hijack it.
+ * This still leaves the door open to attacks that might try to reuse part
+ * of the code, by jumping in the middle of the function, however it can
+ * be mitigated by having a compiler plugin that enforces Control Flow
+ * Integrity (CFI).
+ * Any addition/modification to the rare-write path must follow the same
+ * approach.
+
+ * Return:
+ * * true	- success
+ * * false	- error
+ */
+static __always_inline
+bool pmalloc_rare_write_array(struct pmalloc_pool *pool, const void *dst,
+			      const void *src, size_t n_bytes)
+{
+	return __pmalloc_rare_write(pool, dst, src, n_bytes);
+}
+
+
+void pmalloc_protect_pool(struct pmalloc_pool *pool);
+
+void pmalloc_make_pool_ro(struct pmalloc_pool *pool);
+
+bool pmalloc_is_address_protected(void *p);
+
+void pmalloc_destroy_pool(struct pmalloc_pool *pool);
+#endif
+#endif
