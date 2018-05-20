@@ -9466,6 +9466,7 @@ F:	mm/test_pmalloc.c
 F:	include/linux/prlist.h
 F:	lib/test_prlist.c
 F:	include/linux/pratomic-long.h
+F:	Documentation/core-api/prmem.rst
 
 MEMORY MANAGEMENT
 L:	linux-mm@kvack.org
