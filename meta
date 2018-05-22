@@ -1,11 +1,6 @@
 Version: 1
-Previous: f195d7234076e13001239bdbc6d4725e05658d12
+Previous: 012387d3673644f015fc74768368f3fe54493d01
 Head: c4671e9aefa762daa9c7d9eb85fa4074720ad6bf
 Applied:
-  lkdtm: 09dc02fb7853d433b46cc9202398755cba1ab80f
-  protected-list: 4d79db3dc8538980d3b02d357611a10ea73faacc
-  test_pmalloc: 882ef52a4739272e37aa6b9200ca9756ea0c7d7f
-  docs: aceff4bd7dd8d4a914c9fa1427507cea9024e9ad
-  merge-everything: c4671e9aefa762daa9c7d9eb85fa4074720ad6bf
 Unapplied:
 Hidden:
