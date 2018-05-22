@@ -1,7 +1,8 @@
 Version: 1
-Previous: 0a59bba6da00a99bf044cd9a15e2ddf585fc646e
+Previous: 2133b2f9b816c41a7edaff32aeef628608c6171d
 Head: 09dc02fb7853d433b46cc9202398755cba1ab80f
 Applied:
+  lkdtm: 09dc02fb7853d433b46cc9202398755cba1ab80f
 Unapplied:
   protected-list: 4d79db3dc8538980d3b02d357611a10ea73faacc
   test_pmalloc: a9cea87e36bd9330f974386afe622802a812e8d5
