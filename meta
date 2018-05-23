@@ -1,10 +1,7 @@
 Version: 1
-Previous: 4e5570e8ab13a3e6d96d8ce767d9a6fa1d64dcb7
+Previous: 3a908b228d1abd41de39cd34ef5a575f98b19e74
 Head: 23477778fccbf4d7744ec93270f676043c3d195c
 Applied:
-  test_pmalloc: 7f75281bad488fd09a94957b526d479d9c4909fd
-  docs: d8c8d750ba24929f5fc1c51f33cede8f5ab67cf3
-  merge-everything: 23477778fccbf4d7744ec93270f676043c3d195c
 Unapplied:
   try-writing-to-physmap: eaf5e5527ca6a5e30e321d7bda29802569b3eaa2
 Hidden:
