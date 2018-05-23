@@ -184,6 +184,59 @@ static int test_rare_write(void)
 static int victim __rare_write_after_init = 23;
 #include <linux/rare_write.h>
 
+#define _PS_ 10
+void test_blah(void)
+{
+	unsigned long *victim_vmalloc;
+	struct page *page;
+	unsigned long *victim_linear;
+
+	victim_vmalloc = vmalloc(PAGE_SIZE * _PS_);
+	if (WARN(!victim_vmalloc, "No memory"))
+		return;
+
+	*victim_vmalloc = 12;
+	barrier();
+	pr_info("WWWWWW victim_vmalloc: 0x%016lx - %04lu",
+		(unsigned long)victim_vmalloc, *victim_vmalloc);
+
+	set_memory_ro((unsigned long)victim_vmalloc, _PS_);
+	page = vmalloc_to_page(victim_vmalloc);
+	pr_info("WWWWWW page: 0x%016lx", (unsigned long)page);
+	if (WARN(!page, "No page_vmalloc"))
+		return;
+
+	victim_linear = page_to_virt(page);
+	if (WARN(!victim_linear, "No victim_linear"))
+		return;
+
+	pr_info("WWWWWW victim_linear: 0x%016lx %04lu",
+		(unsigned long)victim_linear, *victim_linear);
+
+	set_memory_rw((unsigned long)victim_linear, _PS_);
+	*victim_linear = 11;
+	barrier();
+
+	pr_info("WWWWWW victim_vmalloc: 0x%016lx %04lu",
+		(unsigned long)victim_vmalloc, *victim_vmalloc);
+
+	pr_info("WWWWWW victim_linear: 0x%016lx %04lu",
+		(unsigned long)victim_linear, *victim_linear);
+
+	set_memory_ro((unsigned long)victim_linear, _PS_);
+
+	set_memory_rw((unsigned long)victim_vmalloc, _PS_);
+	*victim_vmalloc = 14;
+	barrier();
+
+	pr_info("WWWWWW victim_vmalloc: 0x%016lx %04lu",
+		(unsigned long)victim_vmalloc, *victim_vmalloc);
+
+	pr_info("WWWWWW victim_linear: 0x%016lx %04lu",
+		(unsigned long)victim_linear, *victim_linear);
+
+	set_memory_rw((unsigned long)victim_linear, _PS_);
+}
 
 int test_static_rare_write(void)
 {
@@ -195,6 +248,8 @@ int test_static_rare_write(void)
 	pr_info("QQQQQQ victim: 0x%016lx", (unsigned long)&victim);
 	pr_info("QQQQQQ end: 0x%016lx", (unsigned long)&__end_rare_write_after_init);
 	pr_notice("QQQQQQ Victim is %d", victim);
+	test_blah();
+	return 0;
 }
 EXPORT_SYMBOL(test_static_rare_write);
 
