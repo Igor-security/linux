@@ -1,7 +1,8 @@
 Version: 1
-Previous: c141fef0b6142abb5a55147dbd2ed7dde03e1b64
+Previous: 329d76d7eba16044e7300da0d6f73a3c8a3d860d
 Head: e8645c77ceb47eecdaf653107c38c6ad74ee3a0d
 Applied:
+  test_pmalloc: e8645c77ceb47eecdaf653107c38c6ad74ee3a0d
 Unapplied:
   docs: f3a37ad38bcff2c8f49176f6f9ca63f2e8c2a70d
   merge-everything: ac691fc9ee56a7c234e1f52e888014e104d3a494
