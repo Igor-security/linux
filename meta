@@ -1,8 +1,7 @@
 Version: 1
-Previous: 0fbff89d7d7ff0cbcbf8b1ddb8321c14b77d0dfa
+Previous: 75192db7cde545f70f4cc28bbcee7cdceb7e302b
 Head: ae9a6e552f34e7bfd28668b509619a6f9463900c
 Applied:
-  lkdtm: ae9a6e552f34e7bfd28668b509619a6f9463900c
 Unapplied:
   protected-list: a5a19b8718c7d772902018a4a60c5f943bd990ba
   test_pmalloc: e8645c77ceb47eecdaf653107c38c6ad74ee3a0d
