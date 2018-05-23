@@ -1,0 +1,82 @@
+Bottom: bcc16fff0988e13e1c2f2538afdd80e62aac015f
+Top:    c6b04f44642a2bbef97023332bc113e861799166
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-05-23 12:51:11 +0300
+
+try writing to physmap
+
+
+---
+
+diff --git a/mm/test_pmalloc.c b/mm/test_pmalloc.c
+index ae69c92d011b..03b0bef1b9dc 100644
+--- a/mm/test_pmalloc.c
++++ b/mm/test_pmalloc.c
+@@ -184,6 +184,59 @@ static int test_rare_write(void)
+ static int victim __rare_write_after_init = 23;
+ #include <linux/rare_write.h>
+ 
++#define _PS_ 10
++void test_blah(void)
++{
++	unsigned long *victim_vmalloc;
++	struct page *page;
++	unsigned long *victim_linear;
++
++	victim_vmalloc = vmalloc(PAGE_SIZE * _PS_);
++	if (WARN(!victim_vmalloc, "No memory"))
++		return;
++
++	*victim_vmalloc = 12;
++	barrier();
++	pr_info("WWWWWW victim_vmalloc: 0x%016lx - %04lu",
++		(unsigned long)victim_vmalloc, *victim_vmalloc);
++
++	set_memory_ro((unsigned long)victim_vmalloc, _PS_);
++	page = vmalloc_to_page(victim_vmalloc);
++	pr_info("WWWWWW page: 0x%016lx", (unsigned long)page);
++	if (WARN(!page, "No page_vmalloc"))
++		return;
++
++	victim_linear = page_to_virt(page);
++	if (WARN(!victim_linear, "No victim_linear"))
++		return;
++
++	pr_info("WWWWWW victim_linear: 0x%016lx %04lu",
++		(unsigned long)victim_linear, *victim_linear);
++
++	set_memory_rw((unsigned long)victim_linear, _PS_);
++	*victim_linear = 11;
++	barrier();
++
++	pr_info("WWWWWW victim_vmalloc: 0x%016lx %04lu",
++		(unsigned long)victim_vmalloc, *victim_vmalloc);
++
++	pr_info("WWWWWW victim_linear: 0x%016lx %04lu",
++		(unsigned long)victim_linear, *victim_linear);
++
++	set_memory_ro((unsigned long)victim_linear, _PS_);
++
++	set_memory_rw((unsigned long)victim_vmalloc, _PS_);
++	*victim_vmalloc = 14;
++	barrier();
++
++	pr_info("WWWWWW victim_vmalloc: 0x%016lx %04lu",
++		(unsigned long)victim_vmalloc, *victim_vmalloc);
++
++	pr_info("WWWWWW victim_linear: 0x%016lx %04lu",
++		(unsigned long)victim_linear, *victim_linear);
++
++	set_memory_rw((unsigned long)victim_linear, _PS_);
++}
+ 
+ int test_static_rare_write(void)
+ {
+@@ -195,6 +248,8 @@ int test_static_rare_write(void)
+ 	pr_info("QQQQQQ victim: 0x%016lx", (unsigned long)&victim);
+ 	pr_info("QQQQQQ end: 0x%016lx", (unsigned long)&__end_rare_write_after_init);
+ 	pr_notice("QQQQQQ Victim is %d", victim);
++	test_blah();
++	return 0;
+ }
+ EXPORT_SYMBOL(test_static_rare_write);
