@@ -1,7 +1,8 @@
 Version: 1
-Previous: acd03c69ea58b330148403ae1a92351a63a5a26e
+Previous: a8e91dc35577fed67cdd38abe91580a12aac2c6d
 Head: a5a19b8718c7d772902018a4a60c5f943bd990ba
 Applied:
+  protected-list: a5a19b8718c7d772902018a4a60c5f943bd990ba
 Unapplied:
   test_pmalloc: e8645c77ceb47eecdaf653107c38c6ad74ee3a0d
   docs: f3a37ad38bcff2c8f49176f6f9ca63f2e8c2a70d
