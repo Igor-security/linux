@@ -18,25 +18,31 @@ struct prot_list_pool {
 };
 
 struct prot_head {
-	struct prot_head *next, *prev;
+	struct list_head list;
 };
 
-struct prot_list_pool *prot_list_create_custom_pool(size_t refill,
-						    unsigned short align_order);
+static inline struct prot_head *list_to_prot(struct list_head *list)
+{
+	return container_of(list, struct prot_head, list);
+}
+
+struct prot_list_pool
+*prot_list_create_custom_pool(size_t refill, unsigned short align_order);
 
 static inline
 struct prot_list_pool *prot_list_create_pool(void)
 {
 	return prot_list_create_custom_pool(PMALLOC_REFILL_DEFAULT,
-					    PMALLOC_ALIGN_DEFAULT);
+					    PMALLOC_ALIGN_ORDER_DEFAULT);
 }
 
 static inline void INIT_PROT_LIST_HEAD(struct prot_list_pool *pool,
 				       struct prot_head *list)
 {
-	struct prot_head head = {list, list};
+	struct prot_head head = {LIST_HEAD_INIT(list->list)};
 
-	pmalloc_rare_write(&pool->pool, list, &head, sizeof(struct prot_head));
+	pmalloc_rare_write(&pool->pool, list, &head,
+			   sizeof(struct prot_head));
 }
 
 static inline struct prot_head *PROT_LIST_HEAD(struct prot_list_pool *pool)
@@ -55,8 +61,10 @@ static inline struct prot_head *PROT_LIST_HEAD(struct prot_list_pool *pool)
 	__prot_list_add(pool, head, src, sizeof(*src), \
 			((uintptr_t)&(src)->node) - (uintptr_t)(src))
 
-#define prot_list_prepend(pool, head, src, node) \
-	__prot_list_add(pool, (head)->prev, src, sizeof(*(src)), \
+#define	prot_list_prepend(pool, head, src, node)			\
+	__prot_list_add(pool,						\
+			list_to_prot((head)->list.prev),		\
+			(src), sizeof(*(src)),				\
 			((uintptr_t)&(src)->node) - (uintptr_t)(src))
 
 static inline bool __prot_list_add(struct prot_list_pool *pool,
@@ -74,17 +82,17 @@ static inline bool __prot_list_add(struct prot_list_pool *pool,
 		return false;
 	mutex_lock(&pool->pool.mutex);
 	src_list = src + offset;
-	src_list->prev = head;
-	src_list->next = head->next;
+	src_list->list.prev = &head->list;
+	src_list->list.next = head->list.next;
 	retval = pmalloc_rare_write(&pool->pool, dst, src, src_size);
 	if (WARN(!retval, "Failed to init list element."))
 		goto out;
 	p = (void *)(offset + (uintptr_t)dst);
-	retval = pmalloc_rare_write(&pool->pool, &head->next->prev, &p,
+	retval = pmalloc_rare_write(&pool->pool, &head->list.next->prev, &p,
 				      sizeof(p));
 	if (WARN(!retval, "Failed to hook to next element."))
 		goto out;
-	retval = pmalloc_rare_write(&pool->pool, &head->next, &p, sizeof(p));
+	retval = pmalloc_rare_write(&pool->pool, &head->list.next, &p, sizeof(p));
 	if (WARN(!retval, "Failed to hook to previous element."))
 		goto out;
 out:
