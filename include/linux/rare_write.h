@@ -23,7 +23,7 @@ enum rare_write_type {
 	RARE_WRITE_VMALLOC_ADDR,
 };
 
-static __always_inline bool __rare_write_check_bounds(void *dst)
+static __always_inline bool __rare_write_check_bounds(const void *dst)
 {
 	return (dst >= (void *)&__start_rare_write_after_init) &&
 	       (dst < (void *)&__end_rare_write_after_init);
@@ -37,8 +37,8 @@ static __always_inline bool __rare_write_check_bounds(void *dst)
  * checks, also specify the type of memory being modified.
  */
 static __always_inline
-bool __raw_rare_write(void *dst, void *src, enum rare_write_type type,
-		      size_t n_bytes)
+bool __raw_rare_write(const void *dst, const void *src,
+		      enum rare_write_type type, size_t n_bytes)
 {
 	size_t size;
 
@@ -68,7 +68,7 @@ bool __raw_rare_write(void *dst, void *src, enum rare_write_type type,
 }
 
 static __always_inline
-bool __rare_write(void *dst, void *src, size_t n_bytes)
+bool __rare_write(const void *dst, const void *src, size_t n_bytes)
 {
 
 	if (WARN(!(__rare_write_check_bounds(dst)),
