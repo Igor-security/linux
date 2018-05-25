@@ -68,7 +68,7 @@ void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
 #include <linux/llist.h>
 
 #define PMALLOC_REFILL_DEFAULT (0)
-#define PMALLOC_ALIGN_DEFAULT ARCH_KMALLOC_MINALIGN
+#define PMALLOC_ALIGN_ORDER_DEFAULT ilog2(ARCH_KMALLOC_MINALIGN)
 
 
 /*
@@ -186,6 +186,11 @@ static __always_inline bool __protected(struct pmalloc_pool *pool)
 	return __is_area_protected(__current_area(pool));
 }
 
+static __always_inline bool __unwritable(struct pmalloc_pool *pool)
+{
+	return __area_flags(__current_area(pool)) == VM_PMALLOC_PROTECTED;
+}
+
 static inline bool __exhausted(struct pmalloc_pool *pool, size_t size)
 {
 	size_t space_before;
@@ -199,7 +204,7 @@ static inline bool __exhausted(struct pmalloc_pool *pool, size_t size)
 static __always_inline
 bool __space_needed(struct pmalloc_pool *pool, size_t size)
 {
-	return __empty(pool) || __protected(pool) || __exhausted(pool, size);
+	return __empty(pool) || __unwritable(pool) || __exhausted(pool, size);
 }
 
 static __always_inline size_t __get_area_pages_size(struct vmap_area *area)
@@ -306,7 +311,7 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
  *
  * Shorthand for pmalloc_create_custom_pool() with default argument:
  * * refill is set to PMALLOC_REFILL_DEFAULT
- * * align_order is set to PMALLOC_ALIGN_DEFAULT
+ * * align_order is set to PMALLOC_ALIGN_ORDER_DEFAULT
  *
  * Return:
  * * pointer to the new pool	- success
@@ -314,8 +319,9 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
  */
 static inline struct pmalloc_pool *pmalloc_create_pool(uint8_t mode)
 {
+	pr_info("align order: %lu", PMALLOC_ALIGN_ORDER_DEFAULT);
 	return pmalloc_create_custom_pool(PMALLOC_REFILL_DEFAULT,
-					  PMALLOC_ALIGN_DEFAULT,
+					  PMALLOC_ALIGN_ORDER_DEFAULT,
 					  mode);
 }
 
