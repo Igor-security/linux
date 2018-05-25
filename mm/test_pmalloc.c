@@ -208,7 +208,7 @@ static int test_prot_list(void)
 {
 	struct prot_list_pool *pool;
 	struct prot_head *head;
-	struct prot_head *cursor;
+	struct list_head *cursor;
 	struct test_data data;
 	int i;
 
@@ -226,36 +226,46 @@ static int test_prot_list(void)
 		else
 			prot_list_prepend(pool, head, &data, list);
 	}
-	for (cursor = head->next; cursor != head; cursor = cursor->next) {
+	for (cursor = head->list.next; cursor != &head->list; cursor = cursor->next) {
 		struct test_data *data;
 
-		data = container_of(cursor, struct test_data, list);
+		data = container_of(list_to_prot(cursor), struct test_data, list);
 
 		pr_info("cursor: 0x%08lx  data_int: %02d ",
 			(unsigned long)cursor, data->data_int);
 	}
-/*	{
+	for (cursor = head->list.prev; cursor != &head->list; cursor = cursor->prev) {
 		struct test_data *data;
 
-		data = container_of(cursor->next, struct test_data, list);
-		data->data_int += 5;
-	}*/
-	for (cursor = head->prev; cursor != head; cursor = cursor->prev) {
-		struct test_data *data;
-
-		data = container_of(cursor, struct test_data, list);
+		data = container_of(list_to_prot(cursor), struct test_data, list);
 
 		pr_info("cursor: 0x%08lx  data_int: %02d ",
 			(unsigned long)cursor, data->data_int);
 	}
-
 	return 0;
+}
+
+
+void pippo(void)
+{
+	struct pmalloc_pool *pool;
+	int *v1;
+	int *v2;
+	int *v3;
+
+	pool = pmalloc_create_pool(PMALLOC_RW);
+	pr_info("pool->align: %lu", pool->align);
+	v1 = pmalloc(pool, sizeof(int));
+	v2 = pmalloc(pool, sizeof(int));
+	v3 = pmalloc(pool, sizeof(int));
+	pr_info("v1: %lu 0x%016lx", sizeof(int), v1);
+	pr_info("v2: %lu 0x%016lx", sizeof(int), v2);
+	pr_info("v3: %lu 0x%016lx", sizeof(int), v3);
 }
 
 /**
  * test_pmalloc()  -main entry point for running the test cases
  */
-
 static int __init test_pmalloc_init_module(void)
 {
 	pr_notice("pmalloc-selftest");
@@ -267,6 +277,7 @@ static int __init test_pmalloc_init_module(void)
 	test_rare_write();
 	test_prot_list();
 //	test_static_rare_write();
+	pippo();
 	return 0;
 }
 
