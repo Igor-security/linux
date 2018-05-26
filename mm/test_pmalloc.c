@@ -11,7 +11,7 @@
 #include <linux/mm.h>
 #include <linux/bug.h>
 #include <linux/pmalloc.h>
-#include <linux/prot_list.h>
+#include <linux/prlist.h>
 
 #define SIZE_1 (PAGE_SIZE * 3)
 #define SIZE_2 1000
@@ -139,8 +139,8 @@ static inline void init_big_injection(char *big_injection)
 		big_injection[i] = 'X';
 }
 
-/* Verify rewritable feature. */
-static int test_rare_write(void)
+/* Verify pmalloc rewritable feature. */
+static int test_pmalloc_rare_write(void)
 {
 	struct pmalloc_pool *pool;
 	char *array;
@@ -198,69 +198,88 @@ int test_static_rare_write(void)
 }
 EXPORT_SYMBOL(test_static_rare_write);
 
+//struct test_data {
+//	int data_int;
+//	struct prot_head list;
+//	unsigned long long data_ulong;
+//};
+//
+//static int test_prot_list(void)
+//{
+//	struct prot_list_pool *pool;
+//	struct prot_head *head;
+//	struct list_head *cursor;
+//	struct test_data data;
+//	int i;
+//
+//	/* Create a pool for the protectable list. */
+//	pool = prot_list_create_pool();
+//	if (WARN(!pool, "could not create pool"))
+//		return -ENOMEM;
+//
+//	head = PROT_LIST_HEAD(pool);
+//	for (i = 0; i < 100; i++) {
+//		data.data_int = i;
+//		data.data_ulong = i * i;
+//		if (i % 2)
+//			prot_list_append(pool, head, &data, list);
+//		else
+//			prot_list_prepend(pool, head, &data, list);
+//	}
+//	for (cursor = head->list.next; cursor != &head->list; cursor = cursor->next) {
+//		struct test_data *data;
+//
+//		data = container_of(list_to_prot(cursor), struct test_data, list);
+//
+//		pr_info("cursor: 0x%08lx  data_int: %02d ",
+//			(unsigned long)cursor, data->data_int);
+//	}
+//	for (cursor = head->list.prev; cursor != &head->list; cursor = cursor->prev) {
+//		struct test_data *data;
+//
+//		data = container_of(list_to_prot(cursor), struct test_data, list);
+//
+//		pr_info("cursor: 0x%08lx  data_int: %02d ",
+//			(unsigned long)cursor, data->data_int);
+//	}
+//	return 0;
+//}
+//
+//
+//void pippo(void)
+//{
+//	struct pmalloc_pool *pool;
+//	int *v1;
+//	int *v2;
+//	int *v3;
+//
+//	pool = pmalloc_create_pool(PMALLOC_RW);
+//	pr_info("pool->align: %lu", pool->align);
+//	v1 = pmalloc(pool, sizeof(int));
+//	v2 = pmalloc(pool, sizeof(int));
+//	v3 = pmalloc(pool, sizeof(int));
+//	pr_info("v1: %lu 0x%016lx", sizeof(int), v1);
+//	pr_info("v2: %lu 0x%016lx", sizeof(int), v2);
+//	pr_info("v3: %lu 0x%016lx", sizeof(int), v3);
+//}
+
+
 struct test_data {
 	int data_int;
-	struct prot_head list;
+	struct prlist_head list;
 	unsigned long long data_ulong;
 };
 
-static int test_prot_list(void)
+
+
+void test_prlist(void)
 {
-	struct prot_list_pool *pool;
-	struct prot_head *head;
-	struct list_head *cursor;
-	struct test_data data;
-	int i;
+	struct prlist_pool *pool;
+	struct test_data *data;
 
-	/* Create a pool for the protectable list. */
-	pool = prot_list_create_pool();
-	if (WARN(!pool, "could not create pool"))
-		return -ENOMEM;
+	pool = prlist_create_pool();
+	data = prlist_alloc(pool, sizeof(data));
 
-	head = PROT_LIST_HEAD(pool);
-	for (i = 0; i < 100; i++) {
-		data.data_int = i;
-		data.data_ulong = i * i;
-		if (i % 2)
-			prot_list_append(pool, head, &data, list);
-		else
-			prot_list_prepend(pool, head, &data, list);
-	}
-	for (cursor = head->list.next; cursor != &head->list; cursor = cursor->next) {
-		struct test_data *data;
-
-		data = container_of(list_to_prot(cursor), struct test_data, list);
-
-		pr_info("cursor: 0x%08lx  data_int: %02d ",
-			(unsigned long)cursor, data->data_int);
-	}
-	for (cursor = head->list.prev; cursor != &head->list; cursor = cursor->prev) {
-		struct test_data *data;
-
-		data = container_of(list_to_prot(cursor), struct test_data, list);
-
-		pr_info("cursor: 0x%08lx  data_int: %02d ",
-			(unsigned long)cursor, data->data_int);
-	}
-	return 0;
-}
-
-
-void pippo(void)
-{
-	struct pmalloc_pool *pool;
-	int *v1;
-	int *v2;
-	int *v3;
-
-	pool = pmalloc_create_pool(PMALLOC_RW);
-	pr_info("pool->align: %lu", pool->align);
-	v1 = pmalloc(pool, sizeof(int));
-	v2 = pmalloc(pool, sizeof(int));
-	v3 = pmalloc(pool, sizeof(int));
-	pr_info("v1: %lu 0x%016lx", sizeof(int), v1);
-	pr_info("v2: %lu 0x%016lx", sizeof(int), v2);
-	pr_info("v3: %lu 0x%016lx", sizeof(int), v3);
 }
 
 /**
@@ -268,16 +287,17 @@ void pippo(void)
  */
 static int __init test_pmalloc_init_module(void)
 {
-	pr_notice("pmalloc-selftest");
+	pr_notice("rare write selftest");
+	test_static_rare_write();
 
+	pr_notice("pmalloc  selftest");
 	if (unlikely(!(create_and_destroy_pool() &&
 		       test_alloc() &&
 		       test_is_pmalloc_object())))
 		return -1;
 	test_rare_write();
-	test_prot_list();
-//	test_static_rare_write();
-	pippo();
+	test_prlist();
+//	pippo();
 	return 0;
 }
 
