@@ -98,6 +98,11 @@ bool __rare_write(const void *dst, const void *src, size_t n_bytes)
 						__UNIQUE_ID(__dst_ptr),	\
 						__UNIQUE_ID(__src_ptr)))
 
+static inline bool rare_write_ptr(const void **dst, const void *val)
+{
+	return __rare_write(dst, &val, sizeof(void *));
+}
+
 #define rare_write_array(dst_ptr, src_ptr, size)			\
 	__rare_write(dst_ptr, src_ptr, size)
 #endif
