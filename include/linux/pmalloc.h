@@ -319,7 +319,6 @@ struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
  */
 static inline struct pmalloc_pool *pmalloc_create_pool(uint8_t mode)
 {
-	pr_info("align order: %lu", PMALLOC_ALIGN_ORDER_DEFAULT);
 	return pmalloc_create_custom_pool(PMALLOC_REFILL_DEFAULT,
 					  PMALLOC_ALIGN_ORDER_DEFAULT,
 					  mode);
@@ -448,10 +447,8 @@ bool pmalloc_rare_write(struct pmalloc_pool *pool, const void *dst,
 	 * that are not supposed to be modifiable.
 	 */
 	area = __pool_get_area(pool, dst, n_bytes);
-	if (WARN(!area, "Destination range not in pool"))
-		return false;
-	if (WARN(!__is_area_rewritable(area),
-		 "Attempting to modify non rewritable area"))
+	if (WARN(!(area && __is_area_rewritable(area)),
+		 "Incorrect destination."))
 		return false;
 	return __raw_rare_write(dst, src, RARE_WRITE_VMALLOC_ADDR, n_bytes);
 }
