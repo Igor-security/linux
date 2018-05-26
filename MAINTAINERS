@@ -9657,6 +9657,8 @@ S:	Maintained
 F:	include/linux/prmem.h
 F:	include/linux/prmemextra.h
 F:	mm/prmem.c
+F:	mm/test_write_rare.c
+F:	mm/test_pmalloc.c
 
 MEMORY MANAGEMENT
 L:	linux-mm@kvack.org
