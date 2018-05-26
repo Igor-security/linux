@@ -94,3 +94,10 @@ config DEBUG_RODATA_TEST
     depends on STRICT_KERNEL_RWX
     ---help---
       This option enables a testcase for the setting rodata read-only.
+
+config DEBUG_WRITE_RARE_AFTER_INIT_TEST
+    bool "Testcase for the write rare mechanism"
+    depends on STRICT_KERNEL_RWX
+    help
+      This option enables a testcase for the write rare mechanism, applied
+      to statically allocated memory.
