@@ -1,7 +1,8 @@
 Version: 1
-Previous: 614704ce486288860bdd5060ca8781bc34a059aa
+Previous: 79b304f101529a159d35fe0aff8e168bf95cda23
 Head: 3ef156bf0695adde74b3ebc92bb251e8a6884e32
 Applied:
+  lkdtm-tests-for-rare-write-and: 3ef156bf0695adde74b3ebc92bb251e8a6884e32
 Unapplied:
   double-linked-list-using: 59e4f366fd5c7654bdbfb8d94f7d0a08a2f07b7b
   test_pmalloc: a53381913515bf953155983dbe026277ab0833b0
