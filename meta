@@ -1,8 +1,7 @@
 Version: 1
-Previous: 39c9ed675e8d9308841ad601e2c515cc05a8c277
+Previous: a8b5385fdebb5fad1aec9c659f0258b1e375d17a
 Head: 935d431e3b971f32441a7731d6fd7a68fbd5551b
 Applied:
-  protectable-memory-allocator: 935d431e3b971f32441a7731d6fd7a68fbd5551b
 Unapplied:
   lkdtm-tests-for-rare-write-and: 28b329806dd5408b834685cbdd5a5fe508ff0f8f
   double-linked-list-using: 59e4f366fd5c7654bdbfb8d94f7d0a08a2f07b7b
