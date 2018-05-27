@@ -1,8 +1,7 @@
 Version: 1
-Previous: b877c6002d0a6a2ed55c1385ffa8b4311180fb49
+Previous: 1d85bc8ad3a05b5ed48501f3037ab145f34cb920
 Head: b60994e47819c2d36a41b601639af470c908b9c0
 Applied:
-  struct-page-add-field-for: b60994e47819c2d36a41b601639af470c908b9c0
 Unapplied:
   vmalloc-rename-llist-field-in: 17760e02d0302f0285abd56e2f07d232a780f2ed
   protectable-memory-allocator: 2eda5935e15429e8dbbab23d0c5634c43360aa23
