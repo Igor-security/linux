@@ -1,8 +1,9 @@
 Version: 1
-Previous: 9195d5dc90a01fe67ab9147fcb27d7bda2ff2773
-Head: 8d2708ddf4adf54579af4019ebdb2c1c21931843
+Previous: f4b7d816634650aaf377acc497749a1f25e2a189
+Head: 7efcf73da714fb91fe8b9573b24feaee5f1c19d8
 Applied:
   test_pmalloc: 8d2708ddf4adf54579af4019ebdb2c1c21931843
+  refresh-temp: 7efcf73da714fb91fe8b9573b24feaee5f1c19d8
 Unapplied:
   lkdtm-tests-for-rare-write-and: 28b329806dd5408b834685cbdd5a5fe508ff0f8f
   double-linked-list-using: 59e4f366fd5c7654bdbfb8d94f7d0a08a2f07b7b
