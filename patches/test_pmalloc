@@ -1,5 +1,5 @@
 Bottom: 34f41165669da28d8a586c01d773778fc41fcccd
-Top:    4d2fc79bbb4378d7a78a84e622ec4d03b4dc27a4
+Top:    bfa0530b6784382d53e320b779d5de2e70153367
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-05-20 23:35:40 +0300
 
@@ -26,14 +26,14 @@ index 8be4e5e1d349..d1fad2c450fc 100644
 +      Tries to verify that pmalloc works correctly and that the memory is
 +      effectively protected.
 diff --git a/mm/Makefile b/mm/Makefile
-index 7ae34b50a62e..42610ce8f77b 100644
+index 7ae34b50a62e..545254985211 100644
 --- a/mm/Makefile
 +++ b/mm/Makefile
 @@ -66,6 +66,7 @@ obj-$(CONFIG_SPARSEMEM_VMEMMAP) += sparse-vmemmap.o
  obj-$(CONFIG_SLOB) += slob.o
  obj-$(CONFIG_MMU_NOTIFIER) += mmu_notifier.o
  obj-$(CONFIG_PROTECTABLE_MEMORY) += pmalloc.o
-+obj-$(CONFIG_TEST_PROTECTABLE_MEMORY) += test_pmalloc.o
++obj-$(CONFIG_DEBUG_PROTECTABLE_MEMORY_TEST) += test_pmalloc.o
  obj-$(CONFIG_KSM) += ksm.o
  obj-$(CONFIG_PAGE_POISONING) += page_poison.o
  obj-$(CONFIG_SLAB) += slab.o
