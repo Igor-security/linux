@@ -1,11 +1,11 @@
 Version: 1
-Previous: a8b5385fdebb5fad1aec9c659f0258b1e375d17a
-Head: 935d431e3b971f32441a7731d6fd7a68fbd5551b
+Previous: 9195d5dc90a01fe67ab9147fcb27d7bda2ff2773
+Head: 8d2708ddf4adf54579af4019ebdb2c1c21931843
 Applied:
+  test_pmalloc: 8d2708ddf4adf54579af4019ebdb2c1c21931843
 Unapplied:
   lkdtm-tests-for-rare-write-and: 28b329806dd5408b834685cbdd5a5fe508ff0f8f
   double-linked-list-using: 59e4f366fd5c7654bdbfb8d94f7d0a08a2f07b7b
-  test_pmalloc: a53381913515bf953155983dbe026277ab0833b0
   docs: abe6f6c51d3c229c9143f6f0bcabe55716d06591
   merge-everything: dd456b2267faff103f79b3b01f15459178de317a
   prlist-wip: 2553feef8cd595c81a4f38b9139c5af0cfb8d5d8
