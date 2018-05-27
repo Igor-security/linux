@@ -1,9 +1,9 @@
 Version: 1
-Previous: b886b0b45a6532a312a836b5b6381579b762a944
-Head: d85242c3eb6fdf3e88e24c6af0f7a02185cac841
+Previous: 39c9ed675e8d9308841ad601e2c515cc05a8c277
+Head: 935d431e3b971f32441a7731d6fd7a68fbd5551b
 Applied:
+  protectable-memory-allocator: 935d431e3b971f32441a7731d6fd7a68fbd5551b
 Unapplied:
-  protectable-memory-allocator: 2eda5935e15429e8dbbab23d0c5634c43360aa23
   lkdtm-tests-for-rare-write-and: 28b329806dd5408b834685cbdd5a5fe508ff0f8f
   double-linked-list-using: 59e4f366fd5c7654bdbfb8d94f7d0a08a2f07b7b
   test_pmalloc: a53381913515bf953155983dbe026277ab0833b0
