@@ -247,10 +247,6 @@ void __init lkdtm_perms_init(void)
 	/* Test that __ro_after_init is writable during __init */
 	ro_after_init |= 0xAA;
 
-<<<<<<< current
-	/* Make sure we can write to __rare_write_after_init during __init */
-=======
 	/* Test that __rare_write_after_init is writable during __init */
->>>>>>> patched
 	rare_write_after_init |= 0xAA;
 }
