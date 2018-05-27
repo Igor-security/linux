@@ -1,9 +1,9 @@
 Version: 1
-Previous: 1d85bc8ad3a05b5ed48501f3037ab145f34cb920
-Head: b60994e47819c2d36a41b601639af470c908b9c0
+Previous: 6afda48e39dfaebf7abf0c1c1833bfb84baf9d5e
+Head: d85242c3eb6fdf3e88e24c6af0f7a02185cac841
 Applied:
+  vmalloc-rename-llist-field-in: d85242c3eb6fdf3e88e24c6af0f7a02185cac841
 Unapplied:
-  vmalloc-rename-llist-field-in: 17760e02d0302f0285abd56e2f07d232a780f2ed
   protectable-memory-allocator: 2eda5935e15429e8dbbab23d0c5634c43360aa23
   lkdtm-tests-for-rare-write-and: 28b329806dd5408b834685cbdd5a5fe508ff0f8f
   double-linked-list-using: 59e4f366fd5c7654bdbfb8d94f7d0a08a2f07b7b
