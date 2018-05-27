@@ -1,9 +1,9 @@
 Version: 1
-Previous: 0dbd12cbbaa4defdca600a9fb3ca14b88c588fc9
-Head: 61bc01d38e257f474e819ce229f34c92fbf4711c
+Previous: 135a1551ee598f62c7f45a4513f7fb94ce740ece
+Head: bf3c7911cc74d731cf1dbfb2fdb0030f8028efad
 Applied:
+  lkdtm-tests-for-rare-write-of: bf3c7911cc74d731cf1dbfb2fdb0030f8028efad
 Unapplied:
-  lkdtm-tests-for-rare-write-of: 3cdbdb4fef3414c7d702c9282aaaed9990078839
   struct-page-add-field-for: 0f21cca77e23fdf6d8bc224e86530b28065d911b
   vmalloc-rename-llist-field-in: 17760e02d0302f0285abd56e2f07d232a780f2ed
   protectable-memory-allocator: 2eda5935e15429e8dbbab23d0c5634c43360aa23
