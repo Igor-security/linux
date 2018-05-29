@@ -86,62 +86,62 @@ bool __rare_write(const void *dst, const void *src, size_t n_bytes)
 static __always_inline
 bool rare_write_char(const char *dst, const char val)
 {
-	return __rare_write(dst, &val, sizeof(char));
+	return __rare_write(dst, &val, sizeof(val));
 }
 
 static __always_inline
 bool rare_write_short(const short *dst, const short val)
 {
-	return __rare_write(dst, &val, sizeof(short));
+	return __rare_write(dst, &val, sizeof(val));
 }
 
 static __always_inline
 bool rare_write_ushort(const unsigned short *dst, const unsigned short val)
 {
-	return __rare_write(dst, &val, sizeof(unsigned short));
+	return __rare_write(dst, &val, sizeof(val));
 }
 
 static __always_inline
 bool rare_write_int(const int *dst, const int val)
 {
-	return __rare_write(dst, &val, sizeof(int));
+	return __rare_write(dst, &val, sizeof(val));
 }
 
 static __always_inline
 bool rare_write_uint(const unsigned int *dst, const unsigned int val)
 {
-	return __rare_write(dst, &val, sizeof(unsigned int));
+	return __rare_write(dst, &val, sizeof(val));
 }
 
 static __always_inline
 bool rare_write_long(const long *dst, const long val)
 {
-	return __rare_write(dst, &val, sizeof(long));
+	return __rare_write(dst, &val, sizeof(val));
 }
 
 static __always_inline
 bool rare_write_ulong(const unsigned long *dst, const unsigned long val)
 {
-	return __rare_write(dst, &val, sizeof(unsigned long));
+	return __rare_write(dst, &val, sizeof(val));
 }
 
 static __always_inline
 bool rare_write_longlong(const long long *dst, const long long val)
 {
-	return __rare_write(dst, &val, sizeof(long long));
+	return __rare_write(dst, &val, sizeof(val));
 }
 
 static __always_inline
 bool rare_write_ulonglong(const unsigned long long *dst,
 			  const unsigned long long val)
 {
-	return __rare_write(dst, &val, sizeof(unsigned long long));
+	return __rare_write(dst, &val, sizeof(val));
 }
 
 static __always_inline
 bool rare_write_ptr(const void **dst, const void *val)
 {
-	return __rare_write(dst, &val, sizeof(void *));
+	return __rare_write(dst, &val, sizeof(val));
 }
 
 #define __rare_write_simple(dst_ptr, src_ptr)				\
