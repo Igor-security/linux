@@ -227,56 +227,59 @@ bool __area_contains_range(struct vmap_area *area, const void *addr,
 	size_t range_end = range_start + n_bytes;
 
 	return (area->va_start <= range_start) &&
-	       (range_start < area_end) &&
-	       (area->va_start <= range_end) &&
+	       (range_start < range_end) &&
 	       (range_end <= area_end);
 }
 
 static __always_inline
-struct vm_struct *__area_from_range(const void *ptr,
-				    const unsigned long n_bytes)
-{
-	struct vm_struct *area;
-
-	if (unlikely(!is_vmalloc_addr(ptr)))
-		return NULL;
-
-	area = vmalloc_to_page(ptr)->area;
-	if (unlikely(!(area->flags & VM_PMALLOC)))
-		return NULL;
-	/*
-	 * Cannot use __area_contains_range() because it wants a
-	 * vmap_area pointer, but because of the way vmalloc works, it's
-	 * possible to have only a vm_struct pointer.
-	 */
-	if (unlikely(!__area_contains_range(area, ptr, n_bytes)))
-		return NULL;
-	return area;
-}
-
-static __always_inline
-struct vmap_area *__get_area_from_pool_range(struct pmalloc_pool *pool,
-					     const void *addr,
-					     size_t n_bytes)
+struct vmap_area *__pool_get_area(struct pmalloc_pool *pool,
+				  const void *addr, size_t n_bytes)
 {
 	struct vmap_area *area;
-	struct vmap_area *cursor;
 
-	if (unlikely(!is_vmalloc_addr(ptr)))
+	if (unlikely(!is_vmalloc_addr(addr)))
 		return NULL;
+
+	llist_for_each_entry(area, pool->vm_areas.first, area_list)
+		if (unlikely(__area_contains_range(area, addr, n_bytes))){
+			if (WARN(!(area->vm->flags & VM_PMALLOC),
+				 "area in pool not tagged as VM_PMALLOC"))
+				return NULL;
+			return area;
+		}
+	return NULL;
+}
+
+enum {
+	NOT_PMALLOC_OBJECT,
+	BAD_PMALLOC_OBJECT,
+	GOOD_PMALLOC_OBJECT
+};
+
+static inline int is_pmalloc_object(const void *ptr, const size_t n)
+{
+	struct vm_struct *area;
+	size_t area_start;
+	size_t range_start = (size_t)ptr;
+	size_t range_end = range_start + n;
+	size_t area_end;
+
+	if (likely(!is_vmalloc_addr(ptr)))
+		return NOT_PMALLOC_OBJECT;
 
 	area = vmalloc_to_page(ptr)->area;
 	if (unlikely(!(area->flags & VM_PMALLOC)))
-		return NULL;
+		return NOT_PMALLOC_OBJECT;
 
-	if (unlikely(!__area_contains_range(area, ptr, n_bytes)))
-		return NULL;
-	return area;
+	area_start = (size_t)area->addr;
+	area_end = area_start + area->nr_pages * PAGE_SIZE;
 
-	llist_for_each_entry(cursor, pool->vm_areas.first, area_list)
-		if (unlikely(cursor == area))
-			return area;
-	return NULL;
+	if ((area_start <= range_start) &&
+	    (range_start < range_end) &&
+	    (range_end <= area_end))
+		return GOOD_PMALLOC_OBJECT;
+
+	return BAD_PMALLOC_OBJECT;
 }
 
 /*
@@ -285,36 +288,6 @@ struct vmap_area *__get_area_from_pool_range(struct pmalloc_pool *pool,
 void __noreturn usercopy_abort(const char *name, const char *detail,
 			       bool to_user, unsigned long offset,
 			       unsigned long len);
-
-static __always_inline
-struct vm_struct *__pmalloc_get_area(const void *ptr,
-				     const unsigned long n_bytes)
-{
-	struct vm_struct *area;
-	size_t area_end;
-	size_t range_start;
-	size_t range_end;
-
-	if (likely(!is_vmalloc_addr(ptr)))
-		return NULL;
-
-	area = vmalloc_to_page(ptr)->area;
-	if (likely(!(area->flags & VM_PMALLOC)))
-		return NULL;
-
-	area_end = __get_area_pages_end(area);
-	range_start = (size_t)ptr;
-	range_end = range_start + n_bytes;
-
-	return (area->va_start <= range_start) &&
-	       (range_start < area_end) &&
-	       (area->va_start <= range_end) &&
-	       (range_end <= area_end);
-
-	if (!__area_contains_range(area, ptr, n_bytes))
-		return (void *)0xBAD;
-	return area;
-}
 
 /**
  * check_pmalloc_object - helper for hardened usercopy
@@ -328,18 +301,18 @@ struct vm_struct *__pmalloc_get_area(const void *ptr,
  * Micro benchmarking with QEMU shows a reduction of the time spent in this
  * fragment by 60%, when inlined.
  */
-static __always_inline
+static inline
 void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
 {
-	
+	int retv;
 
-	area = __pmalloc_get_area(ptr, n);
-	if (unlikely(area)) {
+	retv = is_pmalloc_object(ptr, n);
+	if (unlikely(retv != NOT_PMALLOC_OBJECT)) {
 		if (unlikely(!to_user))
 			usercopy_abort("pmalloc",
 				       "writing to pmalloc object", to_user,
 				       (const unsigned long)ptr, n);
-		if (retv < 0)
+		if (unlikely(retv == BAD_PMALLOC_OBJECT))
 			usercopy_abort("pmalloc",
 				       "invalid pmalloc object", to_user,
 				       (const unsigned long)ptr, n);
@@ -471,7 +444,7 @@ bool __check_rare_write(struct pmalloc_pool *pool, const void *dst,
 {
 	struct vmap_area *area;
 
-	area = pmalloc_get_area(pool, dst, n_bytes);
+	area = __pool_get_area(pool, dst, n_bytes);
 	return likely(area && __is_area_rewritable(area));
 
 }
