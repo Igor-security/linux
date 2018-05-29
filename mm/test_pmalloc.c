@@ -27,9 +27,9 @@ static inline bool validate_alloc(bool expected, void *addr,
 {
 	bool test;
 
-	test = is_pmalloc_object(addr, size) > 0;
+	test = (is_pmalloc_object(addr, size) == GOOD_PMALLOC_OBJECT);
 	pr_notice("must be %s: %s",
-		  expected ? "ok" : "no", test ? "ok" : "no");
+		  expected ? "ok" : "no", test  ? "ok" : "no");
 	return test == expected;
 }
 
