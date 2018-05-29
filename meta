@@ -1,6 +1,10 @@
 Version: 1
-Previous: None
+Previous: 51e9859559cc7e42d25742755611db025df3947e
 Head: 42f9c6296a2a290198cb16d826ea7f450dc041de
 Applied:
+  lkdtm-tests-for-rare-write-and: 64c9348bfd05d484fce7a0f6ce40ba5455fb5c95
+  double-linked-list-using: cb926bf362a08a40f758db64e5d901b19405f274
+  docs: ee9346290e721d67b1b98651ce47dde96cfb7263
+  merge-everything: 42f9c6296a2a290198cb16d826ea7f450dc041de
 Unapplied:
 Hidden:

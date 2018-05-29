@@ -1,0 +1,97 @@
+Bottom: 0433d59a30c659fbfa18681c9b6e38d92934351b
+Top:    00483c8f428d9418c8793aaf0d657743892853a6
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-05-20 23:19:59 +0300
+
+lkdtm tests for rare write and pmalloc
+
+Add crash tests for __rare_write_after_init and pmalloc.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+
+---
+
+diff --git a/drivers/misc/lkdtm/core.c b/drivers/misc/lkdtm/core.c
+index 33b75f3f7590..f54b63f78e80 100644
+--- a/drivers/misc/lkdtm/core.c
++++ b/drivers/misc/lkdtm/core.c
+@@ -156,6 +156,9 @@ static const struct crashtype crashtypes[] = {
+ 	CRASHTYPE(WRITE_RO),
+ 	CRASHTYPE(WRITE_RO_AFTER_INIT),
+ 	CRASHTYPE(WRITE_RARE_WRITE_AFTER_INIT),
++#ifdef CONFIG_PROTECTABLE_MEMORY
++	CRASHTYPE(WRITE_RO_PMALLOC),
++#endif
+ 	CRASHTYPE(WRITE_KERN),
+ 	CRASHTYPE(REFCOUNT_INC_OVERFLOW),
+ 	CRASHTYPE(REFCOUNT_ADD_OVERFLOW),
+diff --git a/drivers/misc/lkdtm/lkdtm.h b/drivers/misc/lkdtm/lkdtm.h
+index 9f91c916a902..c478964ad12a 100644
+--- a/drivers/misc/lkdtm/lkdtm.h
++++ b/drivers/misc/lkdtm/lkdtm.h
+@@ -39,6 +39,9 @@ void __init lkdtm_perms_init(void);
+ void lkdtm_WRITE_RO(void);
+ void lkdtm_WRITE_RO_AFTER_INIT(void);
+ void lkdtm_WRITE_RARE_WRITE_AFTER_INIT(void);
++#ifdef CONFIG_PROTECTABLE_MEMORY
++void lkdtm_WRITE_RO_PMALLOC(void);
++#endif
+ void lkdtm_WRITE_KERN(void);
+ void lkdtm_EXEC_DATA(void);
+ void lkdtm_EXEC_STACK(void);
+diff --git a/drivers/misc/lkdtm/perms.c b/drivers/misc/lkdtm/perms.c
+index 6ad416b51328..5e371997336f 100644
+--- a/drivers/misc/lkdtm/perms.c
++++ b/drivers/misc/lkdtm/perms.c
+@@ -9,6 +9,7 @@
+ #include <linux/vmalloc.h>
+ #include <linux/mman.h>
+ #include <linux/uaccess.h>
++#include <linux/pmalloc.h>
+ #include <asm/cacheflush.h>
+ 
+ /* Whether or not to fill the target memory area with do_nothing(). */
+@@ -126,6 +127,30 @@ void lkdtm_WRITE_RARE_WRITE_AFTER_INIT(void)
+ 	*ptr ^= 0xabcd1234;
+ }
+ 
++#ifdef CONFIG_PROTECTABLE_MEMORY
++void lkdtm_WRITE_RO_PMALLOC(void)
++{
++	struct pmalloc_pool *pool;
++	int *i;
++
++	pool = pmalloc_create_pool(PMALLOC_RO);
++	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
++		return;
++
++	i = pmalloc(pool, sizeof(int));
++	if (WARN(!i, "Failed allocating memory for pmalloc test.")) {
++		pmalloc_destroy_pool(pool);
++		return;
++	}
++
++	*i = INT_MAX;
++	pmalloc_protect_pool(pool);
++
++	pr_info("attempting bad pmalloc write at %p\n", i);
++	*i = 0;
++}
++#endif
++
+ void lkdtm_WRITE_KERN(void)
+ {
+ 	size_t size;
+@@ -219,9 +244,9 @@ void lkdtm_ACCESS_USERSPACE(void)
+ 
+ void __init lkdtm_perms_init(void)
+ {
+-	/* Make sure we can write to __ro_after_init values during __init */
++	/* Test that __ro_after_init is writable during __init */
+ 	ro_after_init |= 0xAA;
+ 
+-	/* Make sure we can write to __rare_write_after_init during __init */
++	/* Test that __rare_write_after_init is writable during __init */
+ 	rare_write_after_init |= 0xAA;
+ }
