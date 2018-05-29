@@ -33,7 +33,6 @@ static inline bool validate_alloc(bool expected, void *addr,
 	return test == expected;
 }
 
-
 #define is_alloc_ok(variable, size)	\
 	validate_alloc(true, variable, size)
 
@@ -55,7 +54,6 @@ static bool create_and_destroy_pool(void)
 	return true;
 }
 
-
 /*  verifies that it's possible to allocate from the pool */
 static bool test_alloc(void)
 {
@@ -73,7 +71,6 @@ static bool test_alloc(void)
 		return false;
 	return true;
 }
-
 
 /* tests the identification of pmalloc ranges */
 static bool test_is_pmalloc_object(void)
@@ -103,84 +100,102 @@ static bool test_is_pmalloc_object(void)
 		goto error;
 	retval = true;
 error:
-	pmalloc_protect_pool(pool);
+	pmalloc_protect_pool(pool); /* Protect to avoid WARNs on destroy */
 	pmalloc_destroy_pool(pool);
 	vfree(vmalloc_p);
 	return retval;
 }
 
-#define REGION_SIZE (PAGE_SIZE / 4)
-#define REGION_NUMBERS 12
-static inline void fill_region(char *addr, char c)
-{
-	size_t i;
-
-	for (i = 0; i < REGION_SIZE - 1; i++)
-		addr[i] = c;
-	addr[i] = '\0';
-}
-
-static inline void init_regions(char *array)
-{
-	size_t i;
-
-	for (i = 0; i < REGION_NUMBERS; i++)
-		fill_region(array + REGION_SIZE * i, i + 'A');
-}
-
-static inline void show_regions(char *array)
-{
-	size_t i;
-
-	for (i = 0; i < REGION_NUMBERS; i++)
-		pr_info("%s", array + REGION_SIZE * i);
-}
-
-static inline void init_big_injection(char *big_injection)
-{
-	size_t i;
-
-	for (i = 0; i < PAGE_SIZE * 3; i++)
-		big_injection[i] = 'X';
-}
-
-/* Verify rewritable feature. */
-static int test_rare_write(void)
+/* Confirm that RO pools cannot be altered by rare write. */
+static bool test_illegal_rare_write_ro_pool(void)
 {
 	struct pmalloc_pool *pool;
-	char *array;
-	char injection[] = "123456789";
-	unsigned short size = sizeof(injection);
-	char *big_injection;
+	int *var_ptr;
+	bool retval = false;
 
-
-	pr_notice("Test pmalloc_rare_write()");
-	pool = pmalloc_create_pool(PMALLOC_RW);
-	array = pzalloc(pool, REGION_SIZE * REGION_NUMBERS);
-	init_regions(array);
+	pr_notice("Test pmalloc illegal rare_write - it should WARN");
+	pool = pmalloc_create_pool(PMALLOC_RO);
+	if (WARN(!pool, "Failed to create pool"))
+		return false;
+	var_ptr = pmalloc(pool, sizeof(int));
+	if (WARN(!var_ptr, "Failed to allocate memory from pool"))
+		goto destroy_pool;
+	*var_ptr = 0xA5;
 	pmalloc_protect_pool(pool);
-	pr_info("------------------------------------------------------");
-	pmalloc_rare_write(pool, array, injection, size);
-	pmalloc_rare_write(pool, array + REGION_SIZE, injection, size);
-	pmalloc_rare_write(pool,
-			   array + 5 * REGION_SIZE / 2 - size / 2,
-			   injection, size);
-	pmalloc_rare_write(pool, array + 3 * REGION_SIZE - size / 2,
-			   injection, size);
-	show_regions(array);
+	if (WARN(pmalloc_rare_write_int(pool, var_ptr, 0x5A),
+		 "Unexpected successful write to R/O protected pool"))
+		goto destroy_pool;
+	retval = true;
+	pr_notice("Test pmalloc illegal rare_write successful");
+destroy_pool:
 	pmalloc_destroy_pool(pool);
-	pr_info("------------------------------------------------------");
+	return retval;
+}
+
+static int rare_write_data __rare_write_after_init = 0xA5;
+
+static bool test_illegal_rare_write_static_rare_write_mem(void)
+{
+//	struct pmalloc_pool *pool;
+
+
+//	return pmalloc_
+	return true;
+}
+
+static bool test_illegal_rare_writes(void)
+{
+	return test_illegal_rare_write_static_rare_write_mem() &&
+		test_illegal_rare_write_ro_pool();
+}
+
+#define INSERT_OFFSET (PAGE_SIZE * 3 / 2)
+#define INSERT_SIZE (PAGE_SIZE * 2)
+#define REGION_SIZE (PAGE_SIZE * 5)
+/* Verify rare writes across multiple pages, unaligned to PAGE_SIZE. */
+static bool test_pmalloc_rare_write_array(void)
+{
+	struct pmalloc_pool *pool;
+	char *region;
+	char *mod;
+	unsigned int i;
+	int retval = false;
+
+	pr_notice("Test pmalloc_rare_write");
 	pool = pmalloc_create_pool(PMALLOC_RW);
-	array = pzalloc(pool, REGION_SIZE * REGION_NUMBERS);
-	init_regions(array);
+	if (WARN(!pool, "Failed to create pool"))
+		return false;
+	region = pzalloc(pool, REGION_SIZE);
 	pmalloc_protect_pool(pool);
-	big_injection = vmalloc(PAGE_SIZE * 3);
-	init_big_injection(big_injection);
-	pmalloc_rare_write(pool, array + REGION_SIZE / 2, big_injection,
-			   PAGE_SIZE * 2);
-	show_regions(array);
-	pr_info("------------------------------------------------------");
-	return 0;
+	if (WARN(!region, "Failed to allocate memory from pool"))
+		goto destroy_pool;
+	mod = vmalloc(INSERT_SIZE);
+	if (WARN(!mod, "Failed to allocate memory from vmalloc"))
+		goto destroy_pool;
+	memset(mod, 0xA5, INSERT_SIZE);
+	retval = !pmalloc_rare_write_array(pool, region + INSERT_OFFSET,
+					   mod, INSERT_SIZE);
+	if (WARN(retval, "rare_write_array failed"))
+		goto free_mod;
+
+	for (i = 0; i < REGION_SIZE; i++)
+		if (INSERT_OFFSET <= i &&
+		    i < (INSERT_SIZE + INSERT_OFFSET)) {
+			if (WARN(region[i] != (char)0xA5,
+				 "Failed to alter target area"))
+				goto free_mod;
+		} else {
+			if (WARN(region[i] != 0,
+				 "Unexpected alteration outside ragion"))
+				goto free_mod;
+		}
+	retval = true;
+	pr_notice("Test pmalloc_rare_write success");
+free_mod:
+	vfree(mod);
+destroy_pool:
+	pmalloc_destroy_pool(pool);
+	return retval;
 }
 
 /**
@@ -192,9 +207,10 @@ static int __init test_pmalloc_init_module(void)
 
 	if (unlikely(!(create_and_destroy_pool() &&
 		       test_alloc() &&
-		       test_is_pmalloc_object())))
+		       test_is_pmalloc_object() &&
+		       test_pmalloc_rare_write_array() &&
+		       test_illegal_rare_writes())))
 		return -1;
-	test_rare_write();
 	return 0;
 }
 
