@@ -1,10 +1,10 @@
 Version: 1
-Previous: cf77aff5ec11651c8b1bdf659260b469b89d6f98
-Head: 3c45ca8b4558aee2aae5201b132f7e280d60f6c9
+Previous: 5ec59b3b1ff3e2f731b37bfc2111515451ff245f
+Head: eabaeeafe743f03ed248d50aaba5e6a6a535fdda
 Applied:
+  lkdtm-tests-for-rare-write-and: ae99a10b0a565b84d1404cc49b391492886fb00b
+  double-linked-list-using: d813662cfc9fef29330482860bb10061485b94c1
+  docs: f6cccbab952d4fbe5e5605c5c525844e5d799968
+  merge-everything: eabaeeafe743f03ed248d50aaba5e6a6a535fdda
 Unapplied:
-  lkdtm-tests-for-rare-write-and: 64c9348bfd05d484fce7a0f6ce40ba5455fb5c95
-  double-linked-list-using: cb926bf362a08a40f758db64e5d901b19405f274
-  docs: ee9346290e721d67b1b98651ce47dde96cfb7263
-  merge-everything: 42f9c6296a2a290198cb16d826ea7f450dc041de
 Hidden:
