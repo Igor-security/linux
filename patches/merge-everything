@@ -1,0 +1,153 @@
+Bottom: 73f7fa2a8e55a35e60d05146e614559c027c3bbf
+Top:    7962d1d250e1e61ea060815782686770d10a3800
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-03-27 18:37:39 +0300
+
+Merge everything
+
+// This is the 1st commit message:
+
+Protectable Memory
+
+The MMU available in many systems running Linux can often provide R/O
+protection to the memory pages it handles.
+
+However, the MMU-based protection works efficiently only when said pages
+contain exclusively data that will not need further modifications.
+
+Statically allocated variables can be segregated into a dedicated
+section (that's how __ro_after_init works), but this does not sit very
+well with dynamically allocated ones.
+
+Dynamic allocation does not provide, currently, any means for grouping
+variables in memory pages that would contain exclusively data suitable
+for conversion to read only access mode.
+
+The allocator here provided (pmalloc - protectable memory allocator)
+introduces the concept of pools of protectable memory.
+
+A module can instantiate a pool, and then refer any allocation request to
+the pool handler it has received.
+
+A pool is organized ias list of areas of virtually contiguous memory.
+Whenever the protection functionality is invoked on a pool, all the
+areas it contains that are not yet read-only are write-protected.
+
+The process of growing and protecting the pool can be iterated at will.
+Each iteration will prevent further allocation from the memory area
+currently active, turn it into read-only mode and then proceed to
+secure whatever other area might still be unprotected.
+
+Write-protcting some part of a pool before completing all the
+allocations can be wasteful, however it will guarrantee the minimum
+window of vulnerability, sice the data can be allocated, initialized
+and protected in a single sweep.
+
+There are pros and cons, depending on the allocation patterns, the size
+of the areas being allocated, the time intervals between initialization
+and protection.
+
+Dstroying a pool is the only way to claim back the associated memory.
+It is up to its user to avoid any further references to the memory that
+was allocated, once the destruction is invoked.
+
+An example where it is desirable to destroy a pool and claim back its
+memory is when unloading a kernel module.
+
+A module can have as many pools as needed.
+
+Since pmalloc memory is obtained from vmalloc, an attacker that has
+gained access to the physical mapping, still has to identify where the
+target of the attack (in virtually contiguous mapping) is located.
+
+Compared to plain vmalloc, pmalloc does not generate as much TLB
+trashing, since it can host multiple allocations in the same page,
+where present.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+// This is the commit message #2:
+
+lkdtm: crash on overwriting protected pmalloc var
+
+Verify that pmalloc read-only protection is in place: trying to
+overwrite a protected variable will crash the kernel.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+// This is the commit message #3:
+
+Documentation for Pmalloc
+
+Detailed documentation about the protectable memory allocator.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+// This is the commit message #4:
+
+Pmalloc selftest
+
+Add basic self-test functionality for pmalloc.
+
+The testing is introduced as early as possible, right after the main
+dependency, genalloc, has passed successfully, so that it can help
+diagnosing failures in pmalloc users.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+// This is the commit message #5:
+
+Pmalloc Rare Write: modify selected pools
+
+While the vanilla version of pmalloc provides support for permanently
+transitioning between writable and read-only of a memory pool, this
+patch seeks to support a separate class of data, which would still
+benefit from write protection, most of the time, but it still needs to
+be modifiable. Maybe very seldom, but still cannot be permanently marked
+as read-only.
+
+The major changes are:
+- extra parameter, at pool creation, to request modifiable memory
+- pmalloc_rare_write function, to alter the value of modifiable allocations
+
+The implementation tries to prevent attacks by reducing the aperture
+available for modifying the memory, which is also mapped at a random
+address, which is harder to retrieve, even in case of another core
+racing with the one performing the modification.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+CC: Carlos Chinea Perez <carlos.chinea.perez@huawei.com>
+CC: Remi Denis Courmont <remi.denis.courmont@huawei.com>
+
+// This is the commit message #6:
+
+Preliminary self test for pmalloc rare write
+
+Try to alter locked but modifiable pools.
+The test neds some cleanup and expansion.
+It is provided primarily as reference.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+
+---
+
+diff --git a/init/main.c b/init/main.c
+index 3b4ada11ed52..8d58a8ac782c 100644
+--- a/init/main.c
++++ b/init/main.c
+@@ -1054,6 +1054,7 @@ static inline void mark_readonly(void)
+ }
+ #endif
+ 
++int test_static_rare_write(void);
+ static int __ref kernel_init(void *unused)
+ {
+ 	int ret;
+@@ -1065,6 +1066,7 @@ static int __ref kernel_init(void *unused)
+ 	jump_label_invalidate_initmem();
+ 	free_initmem();
+ 	mark_readonly();
++	test_static_rare_write();
+ 	system_state = SYSTEM_RUNNING;
+ 	numa_default_policy();
