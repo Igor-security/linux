@@ -1,8 +1,7 @@
 Version: 1
-Previous: f1a3c45c0d333f84caa96c780bf465818c327187
+Previous: 6663ab04035452552c5876fda2a7f9ef08b2452f
 Head: 51fa9c957970b3940f542248ce63a6f39c52166f
 Applied:
-  double-linked-list-using: 51fa9c957970b3940f542248ce63a6f39c52166f
 Unapplied:
   docs: 453bfd08223e9bcb6588865908bd398ed1b18ebd
   merge-everything: df52127d2ed6aec674c29458cf62d0f6c66a74ba
