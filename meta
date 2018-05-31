@@ -1,9 +1,9 @@
 Version: 1
-Previous: 5b9ca3f5a5847c7d4628336df4b0582353f7072d
-Head: 5d6779a465c64982f7d5d4e601ed56228746b540
+Previous: 286f8aa450ef001e3276682cb74540ddc2a6b829
+Head: ea223e0f49442668155b6e865c53de7dfffeba1c
 Applied:
+  lkdtm-tests-for-rare-write-and: ea223e0f49442668155b6e865c53de7dfffeba1c
 Unapplied:
-  lkdtm-tests-for-rare-write-and: 94909ee0a56ec016b74272feff4e2f150700ac95
   double-linked-list-using: afafa0b73753cdd7ab38f9b9eedd509db4bfdf3f
   docs: 9fcb1c40031b20a3d528b344f803c946f3e35e2d
   merge-everything: 3dcaaed71799510df863bf9e0ce8bba3cb373584
