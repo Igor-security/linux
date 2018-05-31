@@ -2034,6 +2034,15 @@ config IO_STRICT_DEVMEM
 
 	  If in doubt, say Y.
 
+config DEBUG_PRLIST_TEST
+	bool "Testcase for Protected Doubly Linked List"
+	depends on STRICT_KERNEL_RWX && PRMEM
+	help
+	  This option enables the testing of an implementation of double
+	  linked list based on write protected memory.
+	  The test cases can also be used as examples of how to use the
+	  prlist data structure(s).
+
 source "arch/$(SRCARCH)/Kconfig.debug"
 
 endmenu # Kernel hacking
