@@ -47,7 +47,7 @@ static bool test_simple_write(void)
 {
 	int new_val = 0x5A5A;
 
-	if (WARN(!wr_check_boundaries(&scalar, sizeof(scalar)),
+	if (WARN(!__is_wr_after_init(&scalar, sizeof(scalar)),
 		 "The __wr_after_init modifier did NOT work."))
 		return false;
 
@@ -83,9 +83,9 @@ static bool test_cross_page_write(void)
 	for (i = 0; i < CHANGE_SIZE; i++)
 		src[i] = 0x5A;
 
-	check = wr_copy(large + CHANGE_OFFSET, src, CHANGE_SIZE);
+	check = wr_memcpy(large + CHANGE_OFFSET, src, CHANGE_SIZE);
 	vfree(src);
-	if (WARN(!check, "The wr_copy() failed"))
+	if (WARN(!check, "The wr_memcpy() failed"))
 		return false;
 
 	for (i = CHANGE_OFFSET; i < CHANGE_OFFSET + CHANGE_SIZE; i++)
