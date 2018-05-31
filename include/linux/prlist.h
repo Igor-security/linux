@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * prlist.h: Header for Protected Double Linked List
+ * prlist.h: Header for Protected Doubly Linked List
  *
  * (C) Copyright 2018 Huawei Technologies Co. Ltd.
  * Author: Igor Stoppa <igor.stoppa@huawei.com>
@@ -27,6 +27,18 @@ struct prlist_head *list_to_prlist(struct list_head *list)
 	return container_of(list, struct prlist_head, list);
 }
 
+static __always_inline
+struct prlist_head *prlist_prev(struct prlist_head *head)
+{
+	return list_to_prlist(head->list.prev);
+}
+
+static __always_inline
+struct prlist_head *prlist_next(struct prlist_head *head)
+{
+	return list_to_prlist(head->list.next);
+}
+
 struct prlist_pool
 *prlist_create_custom_pool(size_t refill, unsigned short align_order);
 
@@ -43,9 +55,9 @@ void *prlist_alloc(struct prlist_pool *pool, size_t size)
 	return pmalloc(&pool->pool, size);
 }
 
-static __always_inline void prlist_set_prev(struct prlist_pool *pool,
-					    struct prlist_head *head,
-					    const struct prlist_head *prev)
+static __always_inline
+void prlist_set_prev(struct prlist_pool *pool, struct prlist_head *head,
+		     const struct prlist_head *prev)
 {
 	void *dst = &head->list.prev;
 	const void *src = &prev->list;
@@ -56,9 +68,9 @@ static __always_inline void prlist_set_prev(struct prlist_pool *pool,
 		pmalloc_rare_write_ptr(&pool->pool, dst, src);
 }
 
-static __always_inline void prlist_set_next(struct prlist_pool *pool,
-					    struct prlist_head *head,
-					    const struct prlist_head *next)
+static __always_inline
+void prlist_set_next(struct prlist_pool *pool, struct prlist_head *head,
+		     const struct prlist_head *next)
 {
 	void *dst = &head->list.next;
 	const void *src = &next->list;
@@ -82,33 +94,56 @@ void INIT_STATIC_PRLIST_HEAD(struct prlist_head *head)
 	INIT_PRLIST_HEAD(NULL, head);
 }
 
-/*
 static __always_inline
-void prlist_set_next(struct prlist_head *head, struct list_head *next)
+void prlist_add(struct prlist_pool *pool, struct prlist_head *new,
+		struct prlist_head *head)
 {
+	struct prlist_head *next = list_to_prlist(head->list.next);
+
+	prlist_set_next(pool, new, next);
+	prlist_set_prev(pool, new, head);
+
+	prlist_set_prev(pool, next, new);
+	prlist_set_next(pool, head, new);
 }
 
-static inline struct prot_head *PROT_LIST_HEAD(struct prot_list_pool *pool)
+static __always_inline
+void prlist_add_tail(struct prlist_pool *pool, struct prlist_head *new,
+		     struct prlist_head *head)
 {
-	struct prot_head *head;
+	struct prlist_head *prev = list_to_prlist(head->list.prev);
 
-	head = pmalloc(&pool->pool, sizeof(struct prot_head));
-	if (WARN(!head, "Could not allocate protected list head."))
-		return NULL;
-	INIT_PROT_LIST_HEAD(pool, head);
-	return head;
+	prlist_set_next(pool, new, head);
+	prlist_set_prev(pool, new, prev);
 
+	prlist_set_prev(pool, head, new);
+	prlist_set_next(pool, prev, new);
 }
 
-static inline
-void prot_list_add(struct list_head *new, struct list_head *head)
+static __always_inline
+void prlist_del_entry(struct prlist_pool *pool, struct prlist_head *entry)
 {
-	__prot_list_add();
+	struct prlist_head *next;
+	struct prlist_head *prev;
+
+	next = list_to_prlist(entry->list.next);
+	prev = list_to_prlist(entry->list.prev);
+	prlist_set_prev(pool, next, prev);
+	prlist_set_next(pool, prev, next);
+	pmalloc_rare_write_ptr(&pool->pool, &entry->list.next, LIST_POISON1);
+	pmalloc_rare_write_ptr(&pool->pool, &entry->list.prev, LIST_POISON2);
 }
 
-static inline
-void prot_list_add_tail(struct list_head *new, struct list_head *head)
+static __always_inline void dump_prlist_head(struct prlist_head *head)
 {
+	pr_info("head: 0x%08lx   prev: 0x%08lx   next: 0x%08lx",
+		(unsigned long)head, (unsigned long)head->list.prev,
+		(unsigned long)head->list.next);
 }
-*/
+
+static inline void prlist_destroy_pool(struct prlist_pool *pool)
+{
+	pmalloc_destroy_pool(&pool->pool);
+}
+
 #endif
