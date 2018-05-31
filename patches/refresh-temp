@@ -1,0 +1,25 @@
+Bottom: e923f38ac4d04eb2811b0ed3d00d1d60a272b418
+Top:    37fef49782ed92d26ee14068f5810a9df595724c
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-05-31 15:36:32 +0300
+
+Refresh of lkdtm-tests-for-rare-write-and
+
+---
+
+diff --git a/drivers/misc/lkdtm/perms.c b/drivers/misc/lkdtm/perms.c
+index d76a5c1a52b6..b871fa7fa5e8 100644
+--- a/drivers/misc/lkdtm/perms.c
++++ b/drivers/misc/lkdtm/perms.c
+@@ -267,9 +267,9 @@ void lkdtm_ACCESS_USERSPACE(void)
+ 
+ void __init lkdtm_perms_init(void)
+ {
+-	/* Make sure we can write to __ro_after_init values during __init */
++	/* Test that __ro_after_init is writable during __init */
+ 	ro_after_init |= 0xAA;
+ 
+-	/* Make sure we can write to __rare_write_after_init during __init */
++	/* Test that __rare_write_after_init is writable during __init */
+ 	rare_write_after_init |= 0xAA;
+ }
