@@ -1,9 +1,9 @@
 Version: 1
-Previous: 26a73ed0fcce6e890cfc97ee83f96acb712fa3e1
-Head: 5d6779a465c64982f7d5d4e601ed56228746b540
+Previous: 5bd88a096b830c39be7398194ae71c1f35ddc7d3
+Head: 97800087ef0712f03206c13bd3fa29120d8bb5db
 Applied:
+  double-linked-list-using: 97800087ef0712f03206c13bd3fa29120d8bb5db
 Unapplied:
-  double-linked-list-using: afafa0b73753cdd7ab38f9b9eedd509db4bfdf3f
   docs: 9fcb1c40031b20a3d528b344f803c946f3e35e2d
   merge-everything: 3dcaaed71799510df863bf9e0ce8bba3cb373584
 Hidden:
