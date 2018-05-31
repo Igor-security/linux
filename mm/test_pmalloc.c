@@ -29,6 +29,26 @@ static const char MSG_NO_PMEM[] = "Cannot allocate memory from the pool.";
 	pr_info(test_name " test passed")
 
 /* --------------- tests the basic life-cycle of a pool --------------- */
+
+static bool is_address_protected(void *p)
+{
+	struct page *page;
+	struct vm_struct *area;
+
+	if (unlikely(!is_vmalloc_addr(p)))
+		return false;
+	page = vmalloc_to_page(p);
+	if (unlikely(!page))
+		return false;
+	wmb(); /* Flush changes to the page table - is it needed? */
+	area = page->area;
+	if (unlikely((!area) ||
+		     ((area->flags & VM_PMALLOC_PROTECTED_MASK) !=
+		      VM_PMALLOC_PROTECTED_MASK)))
+		return false;
+	return true;
+}
+
 static bool create_and_destroy_pool(void)
 {
 	static struct pmalloc_pool *pool;
@@ -76,7 +96,7 @@ static bool test_auto_ro(void)
 	second_chunk = (int *)pmalloc(pool, PMALLOC_DEFAULT_REFILL_SIZE);
 	if (WARN(!second_chunk, MSG_NO_PMEM))
 		goto error;
-	if (WARN(!pmalloc_is_address_protected(first_chunk),
+	if (WARN(!is_address_protected(first_chunk),
 		 "Failed to automatically write protect exhausted vmarea"))
 		goto error;
 	pr_success("AUTO_RO");
@@ -102,7 +122,7 @@ static bool test_auto_wr(void)
 	second_chunk = (int *)pmalloc(pool, PMALLOC_DEFAULT_REFILL_SIZE);
 	if (WARN(!second_chunk, MSG_NO_PMEM))
 		goto error;
-	if (WARN(!pmalloc_is_address_protected(first_chunk),
+	if (WARN(!is_address_protected(first_chunk),
 		 "Failed to automatically write protect exhausted vmarea"))
 		goto error;
 	pr_success("AUTO_WR");
@@ -126,7 +146,7 @@ static bool test_start_wr(void)
 		chunks[i] = (int *)pmalloc(pool, 1);
 		if (WARN(!chunks[i], MSG_NO_PMEM))
 			goto error;
-		if (WARN(!pmalloc_is_address_protected(chunks[i]),
+		if (WARN(!is_address_protected(chunks[i]),
 			 "vmarea was not protected from the start"))
 			goto error;
 	}
