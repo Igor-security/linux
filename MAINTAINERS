@@ -9450,6 +9450,7 @@ F:	mm/prmem.c
 F:	mm/test_write_rare.c
 F:	mm/test_pmalloc.c
 F:	include/linux/prlist.h
+F:	lib/test_prlist.c
 
 MEMORY MANAGEMENT
 L:	linux-mm@kvack.org
