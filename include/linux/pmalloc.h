@@ -529,7 +529,7 @@ bool pmalloc_rare_write_ulonglong(struct pmalloc_pool *pool,
 
 static __always_inline
 bool pmalloc_rare_write_ptr(struct pmalloc_pool *pool,
-				  const void **dst,
+				  const void *dst,
 				  const void *val)
 {
 	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
