@@ -11,7 +11,7 @@
 
 #include <linux/list.h>
 #include <linux/kernel.h>
-#include <pmalloc.h>
+#include <linux/pmalloc.h>
 
 struct prlist_pool {
 	struct pmalloc_pool pool;
@@ -22,31 +22,40 @@ struct prlist_head {
 };
 
 static __always_inline
-struct prhead *list_to_prlist(struct list_head *list)
+struct prlist_head *list_to_prlist(struct list_head *list)
 {
-	return container_of(list, struct prhead, list);
+	return container_of(list, struct prlist_head, list);
 }
 
 struct prlist_pool
 *prlist_create_custom_pool(size_t refill, unsigned short align_order);
 
-static inline
+static __always_inline
 struct prlist_pool *prlist_create_pool(void)
 {
 	return prlist_create_custom_pool(PMALLOC_REFILL_DEFAULT,
 					 PMALLOC_ALIGN_ORDER_DEFAULT);
 }
 
-static inline void *prlist_alloc(struct prlist_pool *pool, size_t size)
+static __always_inline
+void *prlist_alloc(struct prlist_pool *pool, size_t size)
 {
 	return pmalloc(&pool->pool, size);
 }
 
-static inline void INIT_STATIC_PRLIST_HEAD(struct prlist_pool *pool,
-					   struct prlist_head *head)
+static __always_inline
+void static_prlist_set_next(struct prlist_head *head,
+			    const struct prlist_head *next)
 {
-	pmalloc_rare_write_ptr(&pool->pool, &head->list.prev, &head->list);
-	pmalloc_rare_write_ptr(&pool->pool, &head->list.next, &head->list);
+//	rare_write_ptr(&head->list.next, &next->list);
+}
+
+static __always_inline
+void INIT_STATIC_PRLIST_HEAD(struct prlist_head *head)
+{
+//	static_prlist_set_next(head, head);
+//	pmalloc_rare_write_ptr(&pool->pool, &head->list.prev, &head->list);
+//	pmalloc_rare_write_ptr(&pool->pool, &head->list.next, &head->list);
 }
 /*
 static __always_inline
