@@ -139,7 +139,7 @@ bool rare_write_ulonglong(const unsigned long long *dst,
 }
 
 static __always_inline
-bool rare_write_ptr(const void **dst, const void *val)
+bool rare_write_ptr(const void *dst, const void *val)
 {
 	return __rare_write(dst, &val, sizeof(val));
 }
