@@ -76,65 +76,73 @@ static bool test_cross_page_write(void)
 #define INIT_VAL 1
 #define END_VAL 4
 static char char_var __rare_write_after_init = INIT_VAL;
-static inline bool test_char(void)
+static bool test_char(void)
 {
 	return rare_write_char(&char_var, END_VAL) && char_var == END_VAL;
 }
 
 static short short_var __rare_write_after_init = INIT_VAL;
-static inline bool test_short(void)
+static bool test_short(void)
 {
 	return rare_write_short(&short_var, END_VAL) &&
 		short_var == END_VAL;
 }
 
 static unsigned short ushort_var __rare_write_after_init = INIT_VAL;
-static inline bool test_ushort(void)
+static bool test_ushort(void)
 {
 	return rare_write_ushort(&ushort_var, END_VAL) &&
 		ushort_var == END_VAL;
 }
 
 static int int_var __rare_write_after_init = INIT_VAL;
-static inline bool test_int(void)
+static bool test_int(void)
 {
 	return rare_write_int(&int_var, END_VAL) &&
 		int_var == END_VAL;
 }
 
 static unsigned int uint_var __rare_write_after_init = INIT_VAL;
-static inline bool test_uint(void)
+static bool test_uint(void)
 {
 	return rare_write_uint(&uint_var, END_VAL) &&
 		uint_var == END_VAL;
 }
 
 static long int long_var __rare_write_after_init = INIT_VAL;
-static inline bool test_long(void)
+static bool test_long(void)
 {
 	return rare_write_long(&long_var, END_VAL) &&
 		long_var == END_VAL;
 }
 
 static unsigned long int ulong_var __rare_write_after_init = INIT_VAL;
-static inline bool test_ulong(void)
+static bool test_ulong(void)
 {
 	return rare_write_ulong(&ulong_var, END_VAL) &&
 		ulong_var == END_VAL;
 }
 
 static long long int longlong_var __rare_write_after_init = INIT_VAL;
-static inline bool test_longlong(void)
+static bool test_longlong(void)
 {
 	return rare_write_longlong(&longlong_var, END_VAL) &&
 		longlong_var == END_VAL;
 }
 
 static unsigned long long int ulonglong_var __rare_write_after_init = INIT_VAL;
-static inline bool test_ulonglong(void)
+static bool test_ulonglong(void)
 {
 	return rare_write_ulonglong(&ulonglong_var, END_VAL) &&
 		ulonglong_var == END_VAL;
+}
+
+static int referred_value = INIT_VAL;
+static int *reference __rare_write_after_init = NULL;
+static bool test_ptr(void)
+{
+	return rare_write_ptr(&reference, &referred_value) &&
+		reference == &referred_value;
 }
 
 static bool test_specialized_rare_writes(void)
@@ -143,16 +151,16 @@ static bool test_specialized_rare_writes(void)
 		   test_ushort() && test_int() &&
 		   test_uint() && test_long() && test_ulong() &&
 		   test_long() && test_ulong() &&
-		   test_longlong() && test_ulonglong()),
+		   test_longlong() && test_ulonglong() &&
+		   test_ptr()),
 		 "Specialized rare write test failed"))
 		return false;
-
 	pr_info("Specialized rare write test passed");
 	return true;
 }
 
 static int ro_after_init_data __ro_after_init = INIT_VAL;
-static inline bool test_illegal_rare_write_ro_after_init(void)
+static bool test_illegal_rare_write_ro_after_init(void)
 {
 	pr_info("Illegal rare_write to const memory - it should WARN");
 	if (WARN(rare_write_int(&ro_after_init_data, END_VAL) ||
@@ -164,7 +172,7 @@ static inline bool test_illegal_rare_write_ro_after_init(void)
 }
 
 static volatile const int const_data = INIT_VAL;
-static inline bool test_illegal_rare_write_const(void)
+static bool test_illegal_rare_write_const(void)
 {
 	pr_info("Illegal rare_write to __ro_after_init - it should WARN");
 	if (WARN(rare_write_int((int *)&const_data, END_VAL) ||
@@ -175,7 +183,7 @@ static inline bool test_illegal_rare_write_const(void)
 	return true;
 }
 
-static inline bool test_illegal_rare_writes(void)
+static bool test_illegal_rare_writes(void)
 {
 	if (WARN(!(test_illegal_rare_write_ro_after_init() &&
 		   test_illegal_rare_write_const()),
