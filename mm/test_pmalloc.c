@@ -152,6 +152,13 @@ destroy_pool:
 	return retval;
 }
 
+/*
+ * The following functions test_pmalloc_rare_write_xxx() overwrite an
+ * element within an array and then verify that the change has happened as
+ * expected: the selected element has assumed the new value, while the
+ * others have not been affected.
+ */
+
 #define TEST_ARRAY_SIZE 5
 #define TEST_ARRAY_TARGET (TEST_ARRAY_SIZE / 2)
 
@@ -458,6 +465,40 @@ destroy_pool:
 	return retval;
 }
 
+static bool test_pmalloc_rare_write_ptr(void)
+{
+	struct pmalloc_pool *pool;
+	int **array;
+	unsigned int i;
+	bool retval;
+
+	retval = false;
+	pool = pmalloc_create_pool(PMALLOC_RW);
+	if (WARN(!pool, "Failed to create pool"))
+		return false;
+	array = pmalloc(pool, sizeof(int *) * TEST_ARRAY_SIZE);
+	if (WARN(!array, "Failed to allocate memory from pool"))
+		goto destroy_pool;
+	for (i = 0; i < TEST_ARRAY_SIZE; i++)
+		array[i] = NULL;
+	pmalloc_protect_pool(pool);
+	if (WARN(!pmalloc_rare_write_ptr(pool, array + TEST_ARRAY_TARGET,
+					       array),
+		 "Failed to alter ptr variable"))
+	    goto destroy_pool;
+	for (i = 0; i < TEST_ARRAY_SIZE; i++)
+		if (WARN(array[i] != (i == TEST_ARRAY_TARGET ?
+				      (void *)array : NULL),
+			 "Unexpected value in test array."))
+			goto destroy_pool;
+	retval = true;
+	pr_info("rare_write_ptr test passed");
+destroy_pool:
+	pmalloc_destroy_pool(pool);
+	return retval;
+
+}
+
 static bool test_specialized_rare_writes(void)
 {
 	if (WARN(!(test_pmalloc_rare_write_char() &&
@@ -468,7 +509,8 @@ static bool test_specialized_rare_writes(void)
 		   test_pmalloc_rare_write_long() &&
 		   test_pmalloc_rare_write_ulong() &&
 		   test_pmalloc_rare_write_longlong() &&
-		   test_pmalloc_rare_write_ulonglong()),
+		   test_pmalloc_rare_write_ulonglong() &&
+		   test_pmalloc_rare_write_ptr()),
 		 "specialized rare writes test passedled"))
 		return false;
 	pr_info("specialized rare writes test passed");
@@ -523,7 +565,7 @@ static bool test_illegal_rare_write_static_rare_write_mem(void)
 	return true;
 }
 
-static volatile const int const_data = 0xA5;
+static const int const_data = 0xA5;
 static bool test_illegal_rare_write_const(void)
 {
 	struct pmalloc_pool *pool;
@@ -577,7 +619,7 @@ static bool test_illegal_rare_writes(void)
 	return true;
 }
 
-/**
+/*
  * test_pmalloc()  -main entry point for running the test cases
  */
 static int __init test_pmalloc_init_module(void)
