@@ -92,18 +92,19 @@ struct test_data {
 };
 
 
-struct prlist_head *test_head __rare_write_after_init;
-void test_prlist(void)
+static struct prlist_head test_head __rare_write_after_init;
+static void test_prlist(void)
 {
-	struct prlist_pool *pool;
+/*	struct prlist_pool *pool;
 
 	pool = prlist_create_pool();
-	INIT_STATIC_PRLIST_HEAD(pool, &test_head);
-	if (&test_head->list == test_head->list.prev &&
-	    &test_head->list == test_head->list.next)
+	INIT_STATIC_PRLIST_HEAD(&test_head);
+	if (&test_head.list == test_head.list.next)
+	//if (&test_head->list == test_head->list.prev &&
+	//    &test_head->list == test_head->list.next)
 		pr_info("QQQQQ OK");
 	else
-		pr_info("QQQQQ NO");
+		pr_info("QQQQQ NO"); */
 
 }
 
@@ -116,7 +117,7 @@ static int __init test_prlist_init_module(void)
 	return 0;
 }
 
-module_init(test_pmalloc_init_module);
+module_init(test_prlist_init_module);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Igor Stoppa <igor.stoppa@huawei.com>");
