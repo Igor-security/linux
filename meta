@@ -1,10 +1,7 @@
 Version: 1
-Previous: a6cf5c6b785413d5ea53fa19cf5091eae217761b
+Previous: e032f3bca898aabc0cfe723ce28818e4c46e01b8
 Head: 637ca0361117f741f84f3bf92dd1d691950e79cc
 Applied:
-  lkdtm-tests-for-protectable: 17ea8e6a09927c05f5c33fae079daa0111118e04
-  double-linked-list-using: 4d6253b4052f0c97827215ead11eecfc8fa44ad6
-  test-cases-for-protected: 637ca0361117f741f84f3bf92dd1d691950e79cc
 Unapplied:
   docs: a017ea86b0e52074ff241004a8f433ea2ea44b4f
   merge-everything: e9d725173b7adcdda0e2f44d804d44a4b764ed0c
