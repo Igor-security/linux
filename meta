@@ -1,7 +1,17 @@
 Version: 1
-Previous: 2f42e07791dcc1d5ebce976346a82dce1bd4a37b
+Previous: e2a9e15d3c2270ff9e160844f3a9a651dbec9522
 Head: 54c4be8f3ff43a7e4abd113522b5b1302c621793
 Applied:
+  rare-write-support-for: 2c98e72b0074212d3bca12cf1d161c49fa4a81cc
+  test-cases-for-rare-writes-of: ffce3efc99a222ac73cf5a33a1b52f403ce8032f
+  lkdtm-tests-for-rare-write-of: bdd9d76beed1f79639fe9644ec9d2bbcbf98b526
+  struct-page-add-field-for: e411b66998680b4b723ae3cef5510c827ec7e286
+  vmalloc-rename-llist-field-in: 37d880b03476740679d05a9b0ac15c6de3ac8608
+  protectable-memory-allocator: 9612f1dec79a2f58efd087d872017058c8a208a5
+  test-cases-for-protectable: a6b7b13ac4800d88f10d2d58151af81f499ef679
+  lkdtm-tests-for-protectable: 7c3c0342c7b6a3f2e57e70f74d6794630f7da2fc
+  double-linked-list-using: 541bdc0be75ce0164b32b23f9e055ec9b9e530d1
+  test-cases-for-protected: 54c4be8f3ff43a7e4abd113522b5b1302c621793
 Unapplied:
   docs: a017ea86b0e52074ff241004a8f433ea2ea44b4f
   merge-everything: e9d725173b7adcdda0e2f44d804d44a4b764ed0c
