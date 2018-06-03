@@ -13,12 +13,20 @@
 #include <linux/kernel.h>
 #include <linux/pmalloc.h>
 
-struct prlist_pool {
+struct prlist_head {
+	struct list_head list;
+};
+
+struct prhlist_pool {
 	struct pmalloc_pool pool;
 };
 
-struct prlist_head {
-	struct list_head list;
+struct prhlist_node {
+	struct hlist_node node;
+};
+
+struct prhlist_head {
+	struct hlist_head head;
 };
 
 static __always_inline
@@ -39,24 +47,29 @@ struct prlist_head *prlist_next(struct prlist_head *head)
 	return list_to_prlist(head->list.next);
 }
 
-struct prlist_pool
-*prlist_create_custom_pool(size_t refill, unsigned short align_order);
+static __always_inline
+struct pmalloc_pool *prlist_create_custom_pool(size_t refill,
+					       unsigned short align_order)
+{
+	return pmalloc_create_custom_pool(refill, align_order,
+					  PMALLOC_AUTO_RW);
+}
 
 static __always_inline
-struct prlist_pool *prlist_create_pool(void)
+struct pmalloc_pool *prlist_create_pool(void)
 {
 	return prlist_create_custom_pool(PMALLOC_REFILL_DEFAULT,
 					 PMALLOC_ALIGN_ORDER_DEFAULT);
 }
 
 static __always_inline
-void *prlist_alloc(struct prlist_pool *pool, size_t size)
+void *prlist_alloc(struct pmalloc_pool *pool, size_t size)
 {
-	return pmalloc(&pool->pool, size);
+	return pmalloc(pool, size);
 }
 
 static __always_inline
-void prlist_set_prev(struct prlist_pool *pool, struct prlist_head *head,
+void prlist_set_prev(struct pmalloc_pool *pool, struct prlist_head *head,
 		     const struct prlist_head *prev)
 {
 	void *dst = &head->list.prev;
@@ -65,11 +78,11 @@ void prlist_set_prev(struct prlist_pool *pool, struct prlist_head *head,
 	if (unlikely(rare_write_check_boundaries(head, sizeof(head))))
 		rare_write_ptr(dst, src);
 	else
-		pmalloc_rare_write_ptr(&pool->pool, dst, src);
+		pmalloc_rare_write_ptr(pool, dst, src);
 }
 
 static __always_inline
-void prlist_set_next(struct prlist_pool *pool, struct prlist_head *head,
+void prlist_set_next(struct pmalloc_pool *pool, struct prlist_head *head,
 		     const struct prlist_head *next)
 {
 	void *dst = &head->list.next;
@@ -78,11 +91,11 @@ void prlist_set_next(struct prlist_pool *pool, struct prlist_head *head,
 	if (unlikely(rare_write_check_boundaries(head, sizeof(head))))
 		rare_write_ptr(dst, src);
 	else
-		pmalloc_rare_write_ptr(&pool->pool, dst, src);
+		pmalloc_rare_write_ptr(pool, dst, src);
 }
 
 static __always_inline
-void INIT_PRLIST_HEAD(struct prlist_pool *pool, struct prlist_head *head)
+void INIT_PRLIST_HEAD(struct pmalloc_pool *pool, struct prlist_head *head)
 {
 	prlist_set_prev(pool, head, head);
 	prlist_set_next(pool, head, head);
@@ -95,7 +108,7 @@ void INIT_STATIC_PRLIST_HEAD(struct prlist_head *head)
 }
 
 static __always_inline
-void prlist_add(struct prlist_pool *pool, struct prlist_head *new,
+void prlist_add(struct pmalloc_pool *pool, struct prlist_head *new,
 		struct prlist_head *head)
 {
 	struct prlist_head *next = list_to_prlist(head->list.next);
@@ -108,7 +121,7 @@ void prlist_add(struct prlist_pool *pool, struct prlist_head *new,
 }
 
 static __always_inline
-void prlist_add_tail(struct prlist_pool *pool, struct prlist_head *new,
+void prlist_add_tail(struct pmalloc_pool *pool, struct prlist_head *new,
 		     struct prlist_head *head)
 {
 	struct prlist_head *prev = list_to_prlist(head->list.prev);
@@ -121,7 +134,7 @@ void prlist_add_tail(struct prlist_pool *pool, struct prlist_head *new,
 }
 
 static __always_inline
-void prlist_del_entry(struct prlist_pool *pool, struct prlist_head *entry)
+void prlist_del_entry(struct pmalloc_pool *pool, struct prlist_head *entry)
 {
 	struct prlist_head *next;
 	struct prlist_head *prev;
@@ -130,8 +143,8 @@ void prlist_del_entry(struct prlist_pool *pool, struct prlist_head *entry)
 	prev = list_to_prlist(entry->list.prev);
 	prlist_set_prev(pool, next, prev);
 	prlist_set_next(pool, prev, next);
-	pmalloc_rare_write_ptr(&pool->pool, &entry->list.next, LIST_POISON1);
-	pmalloc_rare_write_ptr(&pool->pool, &entry->list.prev, LIST_POISON2);
+	pmalloc_rare_write_ptr(pool, &entry->list.next, LIST_POISON1);
+	pmalloc_rare_write_ptr(pool, &entry->list.prev, LIST_POISON2);
 }
 
 static __always_inline void dump_prlist_head(struct prlist_head *head)
@@ -141,9 +154,11 @@ static __always_inline void dump_prlist_head(struct prlist_head *head)
 		(unsigned long)head->list.next);
 }
 
-static inline void prlist_destroy_pool(struct prlist_pool *pool)
+static __always_inline void prlist_destroy_pool(struct pmalloc_pool *pool)
 {
-	pmalloc_destroy_pool(&pool->pool);
+	pmalloc_destroy_pool(pool);
 }
+
+#define PRHLIST_HEAD_INIT {.head = HLIST_HEAD_INIT}
 
 #endif
