@@ -1,5 +1,5 @@
 Bottom: 9b1852485096230ba69d3c4be7f92d9ec6769df8
-Top:    2ae491ac5ec991cbaafef773df6c8339e2e3ed2e
+Top:    607af0dc0ea87a6dc4a9c8cacff3310caba1567a
 Author: Igor Stoppa <igor.stoppa@huawei.com>
 Date:   2018-05-26 12:42:42 +0300
 
@@ -41,10 +41,10 @@ index b4e54a9ae9c5..efaf5e342419 100644
 +obj-$(CONFIG_DEBUG_RARE_WRITE_AFTER_INIT_TEST) += test_rare_write.o
 diff --git a/mm/test_rare_write.c b/mm/test_rare_write.c
 new file mode 100644
-index 000000000000..917b69ffaaf6
+index 000000000000..9fb111846da7
 --- /dev/null
 +++ b/mm/test_rare_write.c
-@@ -0,0 +1,212 @@
+@@ -0,0 +1,213 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * test_rare_write.c
@@ -185,7 +185,7 @@ index 000000000000..917b69ffaaf6
 +}
 +
 +static int referred_value = INIT_VAL;
-+static int *reference __rare_write_after_init = NULL;
++static int *reference __rare_write_after_init;
 +static bool test_ptr(void)
 +{
 +	return rare_write_ptr(&reference, &referred_value) &&
@@ -218,6 +218,7 @@ index 000000000000..917b69ffaaf6
 +	return true;
 +}
 +
++/* "volatile" to force the compiler to not optimize away the reading back */
 +static volatile const int const_data = INIT_VAL;
 +static bool test_illegal_rare_write_const(void)
 +{
