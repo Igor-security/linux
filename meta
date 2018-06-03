@@ -1,12 +1,12 @@
 Version: 1
-Previous: 74c07f927ad1352d74afb834495d02265a898842
-Head: 9b53c811fbd9ff8d78034d44d365046c6bbf71e4
+Previous: 4a5ade5a4df78ed58afdf8bb161b79a8236b12f2
+Head: 3b949118c46b6402a8c948bd1c7865126f64dd28
 Applied:
+  lkdtm-tests-for-rare-write-of: 0b43d7c3cbea149e3cbe3c78346623fceed9ef64
+  struct-page-add-field-for: aff64d2c5fde16458e1f8c94067f8905af2641c7
+  vmalloc-rename-llist-field-in: decea8e9427be3225b9d9172c00bb10f8521163a
+  protectable-memory-allocator: 3b949118c46b6402a8c948bd1c7865126f64dd28
 Unapplied:
-  lkdtm-tests-for-rare-write-of: bdd9d76beed1f79639fe9644ec9d2bbcbf98b526
-  struct-page-add-field-for: e411b66998680b4b723ae3cef5510c827ec7e286
-  vmalloc-rename-llist-field-in: 37d880b03476740679d05a9b0ac15c6de3ac8608
-  protectable-memory-allocator: 9612f1dec79a2f58efd087d872017058c8a208a5
   test-cases-for-protectable: a6b7b13ac4800d88f10d2d58151af81f499ef679
   lkdtm-tests-for-protectable: 7c3c0342c7b6a3f2e57e70f74d6794630f7da2fc
   double-linked-list-using: 541bdc0be75ce0164b32b23f9e055ec9b9e530d1
