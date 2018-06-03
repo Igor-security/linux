@@ -19,7 +19,7 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-static struct prlist_pool *pool;
+static struct pmalloc_pool *pool;
 
 static struct prlist_head test_head __rare_write_after_init;
 static bool test_init_prlist_head(void)
@@ -34,7 +34,7 @@ static bool test_init_prlist_head(void)
 }
 
 
-struct test_data {
+struct prlist_data {
 	int d_int;
 	struct prlist_head list;
 	unsigned long long d_ulonglong;
@@ -44,7 +44,7 @@ struct test_data {
 static bool test_build_prlist(void)
 {
 	short i;
-	struct test_data *node;
+	struct prlist_data *node;
 	struct list_head *cursor;
 	int delta;
 
@@ -53,23 +53,19 @@ static bool test_build_prlist(void)
 		return false;
 
 	for (i = 0; i < LIST_NODES; i++) {
-		node = (struct test_data *)pmalloc(&pool->pool,
-						   sizeof(*node));
+		node = (struct prlist_data *)pmalloc(pool, sizeof(*node));
 		if (WARN(!node, "Failed to allocate list node"))
 			goto out;
-		pmalloc_rare_write_int(&pool->pool, &node->d_int, i);
-		pmalloc_rare_write_ulonglong(&pool->pool,
-					     &node->d_ulonglong, i);
+		pmalloc_rare_write_int(pool, &node->d_int, i);
+		pmalloc_rare_write_ulonglong(pool, &node->d_ulonglong, i);
 		prlist_add_tail(pool, &node->list, &test_head);
 	}
 	for (i = 1; i < LIST_NODES; i++) {
-		node = (struct test_data *)pmalloc(&pool->pool,
-						   sizeof(*node));
+		node = (struct prlist_data *)pmalloc(pool, sizeof(*node));
 		if (WARN(!node, "Failed to allocate list node"))
 			goto out;
-		pmalloc_rare_write_int(&pool->pool, &node->d_int, i);
-		pmalloc_rare_write_ulonglong(&pool->pool,
-					     &node->d_ulonglong, i);
+		pmalloc_rare_write_int(pool, &node->d_int, i);
+		pmalloc_rare_write_ulonglong(pool, &node->d_ulonglong, i);
 		prlist_add(pool, &node->list, &test_head);
 	}
 	i = LIST_NODES;
@@ -81,7 +77,7 @@ static bool test_build_prlist(void)
 		if (!i)
 			delta = 1;
 		head = list_to_prlist(cursor);
-		node = container_of(head, struct test_data, list);
+		node = container_of(head, struct prlist_data, list);
 		if (WARN(node->d_int != i || node->d_ulonglong != i,
 			 "unexpected value in list, build test failed"))
 			goto out;
@@ -106,18 +102,52 @@ static bool test_teardown_prlist(void)
 	return true;
 }
 
-static int __init test_prlist_init_module(void)
+static bool test_prlist(void)
 {
 	if (WARN(!(test_init_prlist_head() &&
 		   test_build_prlist() &&
 		   test_teardown_prlist()),
-		 "protected list testing failed"))
+		 "protected list test failed"))
+		return false;
+	pr_info("protected list test passed");
+	return true;
+}
+
+static bool test_init_prhlist_head(void)
+{
+	return true;
+}
+
+static bool test_build_prhlist(void)
+{
+	return true;
+}
+static bool test_teardown_prhlist(void)
+{
+	return true;
+}
+
+static bool test_prhlist(void)
+{
+	if (WARN(!(test_init_prhlist_head() &&
+		   test_build_prhlist() &&
+		   test_teardown_prhlist()),
+		 "protected hlist test failed"))
+		return false;
+	pr_info("protected hlist test passed");
+	return true;
+}
+
+static int __init test_prlists_init_module(void)
+{
+	if (WARN(!(test_prlist() && test_prhlist()),
+		 "protected lists test failed"))
 		return -EFAULT;
-	pr_info("protected list testing passed");
+	pr_info("protected lists test passed");
 	return 0;
 }
 
-module_init(test_prlist_init_module);
+module_init(test_prlists_init_module);
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Igor Stoppa <igor.stoppa@huawei.com>");
