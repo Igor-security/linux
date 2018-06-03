@@ -138,7 +138,7 @@ static bool test_ulonglong(void)
 }
 
 static int referred_value = INIT_VAL;
-static int *reference __rare_write_after_init = NULL;
+static int *reference __rare_write_after_init;
 static bool test_ptr(void)
 {
 	return rare_write_ptr(&reference, &referred_value) &&
@@ -171,6 +171,7 @@ static bool test_illegal_rare_write_ro_after_init(void)
 	return true;
 }
 
+/* "volatile" to force the compiler to not optimize away the reading back */
 static volatile const int const_data = INIT_VAL;
 static bool test_illegal_rare_write_const(void)
 {
