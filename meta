@@ -1,8 +1,7 @@
 Version: 1
-Previous: 657d3b9f4836c0b67b086d6ec6050ed5243899cc
+Previous: 89b2a47fead8ac72faef0c8afb67ea8a33d655fa
 Head: 2c98e72b0074212d3bca12cf1d161c49fa4a81cc
 Applied:
-  rare-write-support-for: 2c98e72b0074212d3bca12cf1d161c49fa4a81cc
 Unapplied:
   test-cases-for-rare-writes-of: ffce3efc99a222ac73cf5a33a1b52f403ce8032f
   lkdtm-tests-for-rare-write-of: bdd9d76beed1f79639fe9644ec9d2bbcbf98b526
