@@ -13,15 +13,13 @@
 #include <linux/kernel.h>
 #include <linux/pmalloc.h>
 
+/* The order inside the union is important, to support LIST_HEAD_INIT() */
 struct prlist_head {
 	union {
+		struct {
+			struct prlist_head *next, *prev;
+		};
 		struct list_head list;
-		struct {
-			struct list_head *next, *prev;
-		};
-		struct {
-			struct prlist_head *prnext, *prprev;
-		};
 	};
 };
 
@@ -34,13 +32,7 @@ struct prhlist_head {
 		struct hlist_head head;
 		//struct prhlist_head prhead;
 	};
-};
-
-static __always_inline
-struct prlist_head *list_to_prlist(struct list_head *list)
-{
-	return container_of(list, struct prlist_head, list);
-}
+} __no_randomize_layout;
 
 static __always_inline
 struct pmalloc_pool *prlist_create_custom_pool(size_t refill,
@@ -87,8 +79,6 @@ void prlist_set_next(struct pmalloc_pool *pool, struct prlist_head *head,
 		pmalloc_rare_write_ptr(pool, dst, next);
 }
 
-#define PRLIST_HEAD(head) {{.prprev = head, .prnext = head,}}
-
 static __always_inline
 void INIT_PRLIST_HEAD(struct pmalloc_pool *pool, struct prlist_head *head)
 {
@@ -106,9 +96,9 @@ static __always_inline
 void prlist_add(struct pmalloc_pool *pool, struct prlist_head *new,
 		struct prlist_head *head)
 {
-	prlist_set_next(pool, new, head->prnext);
+	prlist_set_next(pool, new, head->next);
 	prlist_set_prev(pool, new, head);
-	prlist_set_prev(pool, head->prnext, new);
+	prlist_set_prev(pool, head->next, new);
 	prlist_set_next(pool, head, new);
 }
 
@@ -117,16 +107,16 @@ void prlist_add_tail(struct pmalloc_pool *pool, struct prlist_head *new,
 		     struct prlist_head *head)
 {
 	prlist_set_next(pool, new, head);
-	prlist_set_prev(pool, new, head->prprev);
-	prlist_set_next(pool, head->prprev, new);
+	prlist_set_prev(pool, new, head->prev);
+	prlist_set_next(pool, head->prev, new);
 	prlist_set_prev(pool, head, new);
 }
 
 static __always_inline
 void prlist_del_entry(struct pmalloc_pool *pool, struct prlist_head *entry)
 {
-	prlist_set_prev(pool, entry->prnext, entry->prprev);
-	prlist_set_next(pool, entry->prprev, entry->prnext);
+	prlist_set_prev(pool, entry->next, entry->prev);
+	prlist_set_next(pool, entry->prev, entry->next);
 	pmalloc_rare_write_ptr(pool, &entry->next, LIST_POISON1);
 	pmalloc_rare_write_ptr(pool, &entry->prev, LIST_POISON2);
 }
