@@ -21,12 +21,23 @@
 
 static struct pmalloc_pool *pool;
 
-static struct prlist_head test_head __rare_write_after_init;
+static struct prlist_head test_head __rare_write_after_init =
+	{{LIST_HEAD_INIT(test_head)}};
+
 static bool test_init_prlist_head(void)
 {
+	if (WARN(test_head.prev != &test_head ||
+		 test_head.next != &test_head,
+		 "static initialization of static prlist_head failed"))
+		return false;
+	rare_write_ptr(&test_head.next, NULL);
+	rare_write_ptr(&test_head.prev, NULL);
+	if (WARN(test_head.prev || test_head.next,
+		 "resetting of static prlist_head failed"))
+		return false;
 	INIT_STATIC_PRLIST_HEAD(&test_head);
-	if (WARN(&test_head != test_head.prprev ||
-		 &test_head != test_head.prnext,
+	if (WARN(test_head.prev != &test_head ||
+		 test_head.next != &test_head,
 		 "initialization of static prlist_head failed"))
 		return false;
 	pr_info("initialization of static prlist_head passed");
@@ -45,7 +56,7 @@ static bool test_build_prlist(void)
 {
 	short i;
 	struct prlist_data *node;
-	struct list_head *cursor;
+	struct prlist_head *cursor;
 	int delta;
 
 	pool = prlist_create_pool();
@@ -70,14 +81,11 @@ static bool test_build_prlist(void)
 	}
 	i = LIST_NODES;
 	delta = -1;
-	list_for_each(cursor, &test_head.list) {
-		struct prlist_head *head;
-
+	list_for_each(cursor, &test_head) {
 		i += delta;
 		if (!i)
 			delta = 1;
-		head = list_to_prlist(cursor);
-		node = container_of(head, struct prlist_data, list);
+		node = container_of(cursor, struct prlist_data, list);
 		if (WARN(node->d_int != i || node->d_ulonglong != i,
 			 "unexpected value in list, build test failed"))
 			goto out;
@@ -94,7 +102,7 @@ static bool test_teardown_prlist(void)
 	short i;
 
 	for (i = 0; !list_empty(&test_head.list); i++)
-		prlist_del_entry(pool, test_head.prnext);
+		prlist_del_entry(pool, test_head.next);
 	if (WARN(i != LIST_NODES * 2 - 1, "teardown test failed"))
 		return false;
 	prlist_destroy_pool(pool);
