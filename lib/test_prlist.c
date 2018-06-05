@@ -25,8 +25,8 @@ static struct prlist_head test_head __rare_write_after_init;
 static bool test_init_prlist_head(void)
 {
 	INIT_STATIC_PRLIST_HEAD(&test_head);
-	if (WARN(&test_head.list != test_head.list.prev ||
-		 &test_head.list != test_head.list.next,
+	if (WARN(&test_head != test_head.prprev ||
+		 &test_head != test_head.prnext,
 		 "initialization of static prlist_head failed"))
 		return false;
 	pr_info("initialization of static prlist_head passed");
@@ -94,7 +94,7 @@ static bool test_teardown_prlist(void)
 	short i;
 
 	for (i = 0; !list_empty(&test_head.list); i++)
-		prlist_del_entry(pool, list_to_prlist(test_head.list.next));
+		prlist_del_entry(pool, test_head.prnext);
 	if (WARN(i != LIST_NODES * 2 - 1, "teardown test failed"))
 		return false;
 	prlist_destroy_pool(pool);
@@ -122,6 +122,7 @@ static bool test_build_prhlist(void)
 {
 	return true;
 }
+
 static bool test_teardown_prhlist(void)
 {
 	return true;
