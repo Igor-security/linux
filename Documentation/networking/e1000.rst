@@ -354,8 +354,8 @@ previously mentioned to force the adapter to the same speed and duplex.
 Additional Configurations
 =========================
 
-  Jumbo Frames
-  ------------
+Jumbo Frames
+------------
   Jumbo Frames support is enabled by changing the MTU to a value larger than
   the default of 1500.  Use the ifconfig command to increase the MTU size.
   For example::
@@ -389,8 +389,8 @@ Additional Configurations
      Intel(R) PRO/1000 Gigabit Server Adapter
      Intel(R) PRO/1000 PM Network Connection
 
-  ethtool
-  -------
+ethtool
+-------
   The driver utilizes the ethtool interface for driver configuration and
   diagnostics, as well as displaying statistical information.  The ethtool
   version 1.6 or later is required for this functionality.
@@ -398,8 +398,8 @@ Additional Configurations
   The latest release of ethtool can be found from
   https://www.kernel.org/pub/software/network/ethtool/
 
-  Enabling Wake on LAN* (WoL)
-  ---------------------------
+Enabling Wake on LAN* (WoL)
+---------------------------
   WoL is configured through the ethtool* utility.
 
   WoL will be enabled on the system during the next shut down or reboot.

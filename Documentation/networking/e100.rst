@@ -86,8 +86,8 @@ Event Log Message Level:  The driver uses the message level flag to log events
 Additional Configurations
 =========================
 
-  Configuring the Driver on Different Distributions
-  -------------------------------------------------
+Configuring the Driver on Different Distributions
+-------------------------------------------------
 
   Configuring a network driver to load properly when the system is started is
   distribution dependent. Typically, the configuration process involves adding
@@ -105,8 +105,8 @@ Additional Configurations
        alias eth0 e100
        alias eth1 e100
 
-  Viewing Link Messages
-  ---------------------
+Viewing Link Messages
+---------------------
   In order to see link messages and other Intel driver information on your
   console, you must set the dmesg level up to six. This can be done by
   entering the following on the command line before loading the e100 driver::
@@ -119,8 +119,8 @@ Additional Configurations
   NOTE: This setting is not saved across reboots.
 
 
-  ethtool
-  -------
+ethtool
+-------
 
   The driver utilizes the ethtool interface for driver configuration and
   diagnostics, as well as displaying statistical information.  The ethtool
@@ -129,8 +129,8 @@ Additional Configurations
   The latest release of ethtool can be found from
   https://www.kernel.org/pub/software/network/ethtool/
 
-  Enabling Wake on LAN* (WoL)
-  ---------------------------
+Enabling Wake on LAN* (WoL)
+---------------------------
   WoL is provided through the ethtool* utility.  For instructions on enabling
   WoL with ethtool, refer to the ethtool man page.
 
@@ -138,16 +138,16 @@ Additional Configurations
   this driver version, in order to enable WoL, the e100 driver must be
   loaded when shutting down or rebooting the system.
 
-  NAPI
-  ----
+NAPI
+----
 
   NAPI (Rx polling mode) is supported in the e100 driver.
 
   See https://wiki.linuxfoundation.org/networking/napi for more information
   on NAPI.
 
-  Multiple Interfaces on Same Ethernet Broadcast Network
-  ------------------------------------------------------
+Multiple Interfaces on Same Ethernet Broadcast Network
+------------------------------------------------------
 
   Due to the default ARP behavior on Linux, it is not possible to have
   one system on two IP networks in the same Ethernet broadcast domain
