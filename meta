@@ -1,17 +1,17 @@
 Version: 1
-Previous: 382107384af29dd34f2db3715bfc33f16e1f4958
-Head: e22646b367ac466f607a70d290e79c4b5b6a1674
+Previous: 045b29463c797ec46fcef291fa3efe41d4ed8d4e
+Head: ad1e9ade07433280d89d317cab2eee1cb369b46f
 Applied:
+  test-cases-for-rare-writes-of: 3535e83ac25f57d5f307d6d6d1f5ad40c9909702
+  lkdtm-tests-for-rare-write-of: 8bc24338d088abdb2c5d88cfe0c14367eb9c4d47
+  struct-page-add-field-for: a1d78478fb6deeaa18aa4de20253f5cc9727a979
+  vmalloc-rename-llist-field-in: e55d124298aca61f755cd2071a238719d0dd050f
+  protectable-memory-allocator: 6b1dd4f1eed84fafe7bdf4e52147888401230d5b
+  test-cases-for-protectable: 0bc0052c6a530eb64e166c4a36f531ee14f54dfc
+  lkdtm-tests-for-protectable: 5f1fc99902d4cfe2e7569375c7bc97c9c39eb6d8
+  use-designated-initializer-for: 134ca7e69d3f02912b5fb9d3410d0b3aa9e043ce
+  doubly-linked-list-using: 4fc465db748c82e7ac205968596f5742ddc90790
+  test-cases-for-protected: 660c2c466bd4d4c8673b3def47ec7ea3b6028186
+  docs: ad1e9ade07433280d89d317cab2eee1cb369b46f
 Unapplied:
-  test-cases-for-rare-writes-of: e3ffab518eb45438cb0ce26d647bc31f02ec261e
-  lkdtm-tests-for-rare-write-of: 0af3ae62a1b9ba2c7522b27a51e846834185658e
-  struct-page-add-field-for: abb001d423786864416b865089464ccbbe54cde5
-  vmalloc-rename-llist-field-in: 2cbe92b984a8dc3aca15b81f824e920359ea86f2
-  protectable-memory-allocator: 2efbfeee7ad9381f89a0ab94d03207ae9f84ef87
-  test-cases-for-protectable: 759c658213260192ad4fddd258fc551405eb893d
-  lkdtm-tests-for-protectable: 3201cf7803db566498ed85c888f5258cd2283dca
-  use-designated-initializer-for: ed766cc772d592c8066ff4efb8d4cb4e9319a8aa
-  doubly-linked-list-using: b6b4b7a39c0376dee20a778014ef820315cac14f
-  test-cases-for-protected: f76c3528ae37050009bc3ec24f9746f54ae172e8
-  docs: 6f7fdd09c58310f069eaad401094e534d8b84c79
 Hidden:
