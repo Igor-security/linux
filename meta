@@ -1,7 +1,8 @@
 Version: 1
-Previous: 4969f2f882022c0e8811a6a5ea1d48e3eb85db15
+Previous: 9717cb09f628e970b682efe91880d075bc75c6e1
 Head: ad1e9ade07433280d89d317cab2eee1cb369b46f
 Applied:
+  test-cases-for-protected: 660c2c466bd4d4c8673b3def47ec7ea3b6028186
   docs: ad1e9ade07433280d89d317cab2eee1cb369b46f
 Unapplied:
 Hidden:
