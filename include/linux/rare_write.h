@@ -13,6 +13,7 @@
 #ifndef _LINUX_RARE_WRITE_H
 #define _LINUX_RARE_WRITE_H
 
+#include <linux/compiler.h>
 #include <linux/mm.h>
 
 extern long __start_rare_write_after_init;
