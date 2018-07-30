@@ -1,8 +1,7 @@
 Version: 1
-Previous: 5170869677a75d56caa55df9638b6fb8d57e7a62
+Previous: b384bd4f0165d55e3538ed58a8398b64946fd18d
 Head: ad1e9ade07433280d89d317cab2eee1cb369b46f
 Applied:
-  doubly-linked-list-using: 4fc465db748c82e7ac205968596f5742ddc90790
   test-cases-for-protected: 660c2c466bd4d4c8673b3def47ec7ea3b6028186
   docs: ad1e9ade07433280d89d317cab2eee1cb369b46f
 Unapplied:
