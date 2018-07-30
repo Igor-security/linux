@@ -1,7 +1,8 @@
 Version: 1
-Previous: 257ab1982981345c54af92db6a30209bbdbee931
+Previous: af2589056a83132414450755c78d9cdc804aecaa
 Head: ad1e9ade07433280d89d317cab2eee1cb369b46f
 Applied:
+  use-designated-initializer-for: 134ca7e69d3f02912b5fb9d3410d0b3aa9e043ce
   doubly-linked-list-using: 4fc465db748c82e7ac205968596f5742ddc90790
   test-cases-for-protected: 660c2c466bd4d4c8673b3def47ec7ea3b6028186
   docs: ad1e9ade07433280d89d317cab2eee1cb369b46f
