@@ -1,7 +1,8 @@
 Version: 1
-Previous: 5eff13ec8b0d688ec5a69ebaf5aac4ca20964c21
-Head: ad1e9ade07433280d89d317cab2eee1cb369b46f
+Previous: 28ebdd639eb45caa42fd94e209ecee129c883a6e
+Head: 7a044ebaf7cd37dd41f807d6d904ae322f76d1d6
 Applied:
+Unapplied:
   rare-write-support-for: 2b09d19a76a8d3bec66d76a4ce9a66b24459243d
   fix-rare-write: e22646b367ac466f607a70d290e79c4b5b6a1674
   test-cases-for-rare-writes-of: 3535e83ac25f57d5f307d6d6d1f5ad40c9909702
@@ -15,5 +16,4 @@ Applied:
   doubly-linked-list-using: 4fc465db748c82e7ac205968596f5742ddc90790
   test-cases-for-protected: 660c2c466bd4d4c8673b3def47ec7ea3b6028186
   docs: ad1e9ade07433280d89d317cab2eee1cb369b46f
-Unapplied:
 Hidden:
