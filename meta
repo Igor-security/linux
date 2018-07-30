@@ -1,9 +1,10 @@
 Version: 1
-Previous: e1e2044a2a626237915a32b1770a24c0124e4cb0
-Head: e22646b367ac466f607a70d290e79c4b5b6a1674
+Previous: d09523eec20d96c6ad55d269486b3165edb5a7eb
+Head: b946e22b654bcf7deb42bcd706415dddc679cddb
 Applied:
   rare-write-support-for: 2b09d19a76a8d3bec66d76a4ce9a66b24459243d
   fix-rare-write: e22646b367ac466f607a70d290e79c4b5b6a1674
+  refresh-temp: b946e22b654bcf7deb42bcd706415dddc679cddb
 Unapplied:
   test-cases-for-rare-writes-of: 3535e83ac25f57d5f307d6d6d1f5ad40c9909702
   lkdtm-tests-for-rare-write-of: 8bc24338d088abdb2c5d88cfe0c14367eb9c4d47
