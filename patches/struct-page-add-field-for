@@ -1,0 +1,59 @@
+Bottom: acfdf5a8cf18309ec03a90cabea47afb2f2a8082
+Top:    4123b52897c01a52419e1d2b2ac1f0bea8fd2112
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-03-27 18:37:37 +0300
+
+struct page: add field for vm_struct
+
+When a page is used for virtual memory, it is often necessary to obtain
+a handler to the corresponding vm_struct, which refers to the virtually
+continuous area generated when invoking vmalloc.
+
+The struct page has a "mapping" field, which can be re-used, to store a
+pointer to the parent area.
+
+This will avoid more expensive searches, later on.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+
+---
+
+diff --git a/include/linux/mm_types.h b/include/linux/mm_types.h
+index 99ce070e7dcb..d59691428e16 100644
+--- a/include/linux/mm_types.h
++++ b/include/linux/mm_types.h
+@@ -94,6 +94,13 @@ struct page {
+ 			 * Indicates order in the buddy system if PageBuddy.
+ 			 */
+ 			unsigned long private;
++			/**
++			 * @area: reference to the containing area
++			 * For pages that are mapped into a virtually
++			 * contiguous area, avoids performing a more
++			 * expensive lookup.
++			 */
++			struct vm_struct *area;
+ 		};
+ 		struct {	/* slab, slob and slub */
+ 			union {
+diff --git a/mm/vmalloc.c b/mm/vmalloc.c
+index cfea25be7754..4ebc0a71e238 100644
+--- a/mm/vmalloc.c
++++ b/mm/vmalloc.c
+@@ -1523,6 +1523,7 @@ static void __vunmap(const void *addr, int deallocate_pages)
+ 			struct page *page = area->pages[i];
+ 
+ 			BUG_ON(!page);
++			page->area = NULL;
+ 			__free_pages(page, 0);
+ 		}
+ 
+@@ -1692,6 +1693,7 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
+ 			area->nr_pages = i;
+ 			goto fail;
+ 		}
++		page->area = area;
+ 		area->pages[i] = page;
+ 		if (gfpflags_allow_blocking(gfp_mask|highmem_mask))
+ 			cond_resched();

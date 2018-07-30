@@ -1,0 +1,110 @@
+Bottom: 40871def59e1be0d59d1304af0972fb16de12e0d
+Top:    0e340034753bc85871fa216a9c3ca3869a1ebc4b
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-05-20 23:19:59 +0300
+
+lkdtm tests for protectable memory allocator
+
+Add crash tests for dynamically allocated protected memory.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+
+---
+
+diff --git a/drivers/misc/lkdtm/core.c b/drivers/misc/lkdtm/core.c
+index 33b75f3f7590..bddf8ec43d51 100644
+--- a/drivers/misc/lkdtm/core.c
++++ b/drivers/misc/lkdtm/core.c
+@@ -156,6 +156,10 @@ static const struct crashtype crashtypes[] = {
+ 	CRASHTYPE(WRITE_RO),
+ 	CRASHTYPE(WRITE_RO_AFTER_INIT),
+ 	CRASHTYPE(WRITE_RARE_WRITE_AFTER_INIT),
++#ifdef CONFIG_PROTECTABLE_MEMORY
++	CRASHTYPE(WRITE_RO_PMALLOC),
++	CRASHTYPE(WRITE_RARE_WRITE_PMALLOC),
++#endif
+ 	CRASHTYPE(WRITE_KERN),
+ 	CRASHTYPE(REFCOUNT_INC_OVERFLOW),
+ 	CRASHTYPE(REFCOUNT_ADD_OVERFLOW),
+diff --git a/drivers/misc/lkdtm/lkdtm.h b/drivers/misc/lkdtm/lkdtm.h
+index 9f91c916a902..82e0ada25661 100644
+--- a/drivers/misc/lkdtm/lkdtm.h
++++ b/drivers/misc/lkdtm/lkdtm.h
+@@ -39,6 +39,10 @@ void __init lkdtm_perms_init(void);
+ void lkdtm_WRITE_RO(void);
+ void lkdtm_WRITE_RO_AFTER_INIT(void);
+ void lkdtm_WRITE_RARE_WRITE_AFTER_INIT(void);
++#ifdef CONFIG_PROTECTABLE_MEMORY
++void lkdtm_WRITE_RO_PMALLOC(void);
++void lkdtm_WRITE_RARE_WRITE_PMALLOC(void);
++#endif
+ void lkdtm_WRITE_KERN(void);
+ void lkdtm_EXEC_DATA(void);
+ void lkdtm_EXEC_STACK(void);
+diff --git a/drivers/misc/lkdtm/perms.c b/drivers/misc/lkdtm/perms.c
+index 6ad416b51328..d76a5c1a52b6 100644
+--- a/drivers/misc/lkdtm/perms.c
++++ b/drivers/misc/lkdtm/perms.c
+@@ -9,6 +9,7 @@
+ #include <linux/vmalloc.h>
+ #include <linux/mman.h>
+ #include <linux/uaccess.h>
++#include <linux/pmalloc.h>
+ #include <asm/cacheflush.h>
+ 
+ /* Whether or not to fill the target memory area with do_nothing(). */
+@@ -126,6 +127,53 @@ void lkdtm_WRITE_RARE_WRITE_AFTER_INIT(void)
+ 	*ptr ^= 0xabcd1234;
+ }
+ 
++#ifdef CONFIG_PROTECTABLE_MEMORY
++void lkdtm_WRITE_RO_PMALLOC(void)
++{
++	struct pmalloc_pool *pool;
++	int *i;
++
++	pool = pmalloc_create_pool(PMALLOC_RO);
++	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
++		return;
++
++	i = pmalloc(pool, sizeof(int));
++	if (WARN(!i, "Failed allocating memory for pmalloc test.")) {
++		pmalloc_destroy_pool(pool);
++		return;
++	}
++
++	*i = INT_MAX;
++	pmalloc_protect_pool(pool);
++
++	pr_info("attempting bad pmalloc write at %p\n", i);
++	*i = 0;
++}
++
++void lkdtm_WRITE_RARE_WRITE_PMALLOC(void)
++{
++	struct pmalloc_pool *pool;
++	int *i;
++
++	pool = pmalloc_create_pool(PMALLOC_RW);
++	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
++		return;
++
++	i = pmalloc(pool, sizeof(int));
++	if (WARN(!i, "Failed allocating memory for pmalloc test.")) {
++		pmalloc_destroy_pool(pool);
++		return;
++	}
++
++	*i = INT_MAX;
++	pmalloc_protect_pool(pool);
++
++	pr_info("attempting bad pmalloc write at %p\n", i);
++	*i = 0;
++}
++
++#endif
++
+ void lkdtm_WRITE_KERN(void)
+ {
+ 	size_t size;
