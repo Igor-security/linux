@@ -1,0 +1,273 @@
+Bottom: 9aaa3745471db8be1f14ee2a3f0a5b97b1670a21
+Top:    8a79c9afbb2f0dc7dcc0bbb09dc5f48345848f14
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-05-26 12:42:42 +0300
+
+Test cases for rare writes of static memory
+
+Testing that the rare-write mechanisms work correctly in its various
+declinations.
+This is not about testing that the memory is write-protected, rather
+that the values read back match what was written.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+
+---
+
+diff --git a/mm/Kconfig.debug b/mm/Kconfig.debug
+index e5e606ee5f71..8be4e5e1d349 100644
+--- a/mm/Kconfig.debug
++++ b/mm/Kconfig.debug
+@@ -94,3 +94,10 @@ config DEBUG_RODATA_TEST
+     depends on STRICT_KERNEL_RWX
+     ---help---
+       This option enables a testcase for the setting rodata read-only.
++
++config DEBUG_RARE_WRITE_AFTER_INIT_TEST
++    bool "Testcase for the mechanism performing rare writes"
++    depends on STRICT_KERNEL_RWX
++    ---help---
++      This option enables a testcase for the rare-write mechanism, applied
++      to statically allocated memory.
+diff --git a/mm/Makefile b/mm/Makefile
+index 8716bdabe1e6..989d55fc4498 100644
+--- a/mm/Makefile
++++ b/mm/Makefile
+@@ -106,3 +106,4 @@ obj-$(CONFIG_HARDENED_USERCOPY) += usercopy.o
+ obj-$(CONFIG_PERCPU_STATS) += percpu-stats.o
+ obj-$(CONFIG_HMM) += hmm.o
+ obj-$(CONFIG_MEMFD_CREATE) += memfd.o
++obj-$(CONFIG_DEBUG_RARE_WRITE_AFTER_INIT_TEST) += test_rare_write.o
+diff --git a/mm/test_rare_write.c b/mm/test_rare_write.c
+new file mode 100644
+index 000000000000..3c995e7ed53d
+--- /dev/null
++++ b/mm/test_rare_write.c
+@@ -0,0 +1,226 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * test_rare_write.c
++ *
++ * (C) Copyright 2018 Huawei Technologies Co. Ltd.
++ * Author: Igor Stoppa <igor.stoppa@huawei.com>
++ */
++
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/mm.h>
++#include <linux/bug.h>
++#include <linux/rare_write.h>
++
++#ifdef pr_fmt
++#undef pr_fmt
++#endif
++
++#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
++
++static int scalar __rare_write_after_init = 0xA5A5;
++
++static bool test_alignment(void)
++{
++	size_t pstart = (size_t)&__start_rare_write_after_init;
++	size_t pend = (size_t)&__end_rare_write_after_init;
++
++	if (WARN((pstart & ~PAGE_MASK) || (pend & ~PAGE_MASK) ||
++		 (pstart >= pend), "Boundaries test failed."))
++		return false;
++	pr_info("Bondaries test passed.");
++	return true;
++}
++
++static bool test_simple_write(void)
++{
++	int new_val = 0x5A5A;
++
++	if (WARN(!rare_write_check_boundaries(&scalar, sizeof(scalar)),
++		 "The __rare_write_after_init modifier did NOT work."))
++		return false;
++
++	if (WARN(!rare_write(&scalar, &new_val) || scalar != new_val,
++		 "Scalar rare write test failed"))
++		return false;
++
++	pr_info("Scalar rare-write test passed.");
++	return true;
++}
++
++#define LARGE_SIZE (PAGE_SIZE * 5)
++#define CHANGE_SIZE (PAGE_SIZE * 2)
++#define CHANGE_OFFSET (PAGE_SIZE / 2)
++
++static char large[LARGE_SIZE] __rare_write_after_init;
++
++static bool test_cross_page_write(void)
++{
++	unsigned int i;
++	char *src;
++	bool check;
++
++	src = vmalloc(PAGE_SIZE * 2);
++	if (WARN(!src, "could not allocate memory"))
++		return false;
++
++	for (i = 0; i < LARGE_SIZE; i++)
++		large[i] = 0xA5;
++
++	for (i = 0; i < CHANGE_SIZE; i++)
++		src[i] = 0x5A;
++
++	check = rare_write_array(large + CHANGE_OFFSET, src, CHANGE_SIZE);
++	vfree(src);
++	if (WARN(!check, "The rare_write_array() failed"))
++		return false;
++
++	for (i = CHANGE_OFFSET; i < CHANGE_OFFSET + CHANGE_SIZE; i++)
++		if (WARN(large[i] != 0x5A,
++			 "Cross-page rare-write test failed"))
++			return false;
++
++	pr_info("Cross-page rare-write test passed");
++	return true;
++}
++
++
++#define INIT_VAL 1
++#define END_VAL 4
++static char char_var __rare_write_after_init = INIT_VAL;
++static bool test_char(void)
++{
++	return rare_write_char(&char_var, END_VAL) && char_var == END_VAL;
++}
++
++static short short_var __rare_write_after_init = INIT_VAL;
++static bool test_short(void)
++{
++	return rare_write_short(&short_var, END_VAL) &&
++		short_var == END_VAL;
++}
++
++static unsigned short ushort_var __rare_write_after_init = INIT_VAL;
++static bool test_ushort(void)
++{
++	return rare_write_ushort(&ushort_var, END_VAL) &&
++		ushort_var == END_VAL;
++}
++
++static int int_var __rare_write_after_init = INIT_VAL;
++static bool test_int(void)
++{
++	return rare_write_int(&int_var, END_VAL) &&
++		int_var == END_VAL;
++}
++
++static unsigned int uint_var __rare_write_after_init = INIT_VAL;
++static bool test_uint(void)
++{
++	return rare_write_uint(&uint_var, END_VAL) &&
++		uint_var == END_VAL;
++}
++
++static long int long_var __rare_write_after_init = INIT_VAL;
++static bool test_long(void)
++{
++	return rare_write_long(&long_var, END_VAL) &&
++		long_var == END_VAL;
++}
++
++static unsigned long int ulong_var __rare_write_after_init = INIT_VAL;
++static bool test_ulong(void)
++{
++	return rare_write_ulong(&ulong_var, END_VAL) &&
++		ulong_var == END_VAL;
++}
++
++static long long int longlong_var __rare_write_after_init = INIT_VAL;
++static bool test_longlong(void)
++{
++	return rare_write_longlong(&longlong_var, END_VAL) &&
++		longlong_var == END_VAL;
++}
++
++static unsigned long long int ulonglong_var __rare_write_after_init = INIT_VAL;
++static bool test_ulonglong(void)
++{
++	return rare_write_ulonglong(&ulonglong_var, END_VAL) &&
++		ulonglong_var == END_VAL;
++}
++
++static int referred_value = INIT_VAL;
++static int *reference __rare_write_after_init;
++static bool test_ptr(void)
++{
++	return rare_write_ptr(&reference, &referred_value) &&
++		reference == &referred_value;
++}
++
++static bool test_specialized_rare_writes(void)
++{
++	if (WARN(!(test_char() && test_short() &&
++		   test_ushort() && test_int() &&
++		   test_uint() && test_long() && test_ulong() &&
++		   test_long() && test_ulong() &&
++		   test_longlong() && test_ulonglong() &&
++		   test_ptr()),
++		 "Specialized rare write test failed"))
++		return false;
++	pr_info("Specialized rare write test passed");
++	return true;
++}
++
++static int ro_after_init_data __ro_after_init = INIT_VAL;
++static bool test_illegal_rare_write_ro_after_init(void)
++{
++	pr_info("Illegal rare_write to const memory - it should WARN");
++	if (WARN(rare_write_int(&ro_after_init_data, END_VAL) ||
++		 ro_after_init_data == END_VAL,
++		 "Unexpected successful write to const memory"))
++		return false;
++	pr_info("Illegal rare_write to const memory test passed");
++	return true;
++}
++
++/* "volatile" to force the compiler to not optimize away the reading back */
++static volatile const int const_data = INIT_VAL;
++static bool test_illegal_rare_write_const(void)
++{
++	pr_info("Illegal rare_write to __ro_after_init - it should WARN");
++	if (WARN(rare_write_int((int *)&const_data, END_VAL) ||
++		 const_data == END_VAL,
++		 "Unexpected successful write to __ro_after_init memory"))
++		return false;
++	pr_info("Illegal rare_write to __ro_after_init memory test passed");
++	return true;
++}
++
++static bool test_illegal_rare_writes(void)
++{
++	if (WARN(!(test_illegal_rare_write_ro_after_init() &&
++		   test_illegal_rare_write_const()),
++		 "illegal static rare writes test failed"))
++		return false;
++	pr_info("illegal static rare writes test passed");
++	return true;
++}
++
++static int __init test_static_rare_write_init_module(void)
++{
++	if (WARN(!(test_alignment() &&
++		   test_simple_write() &&
++		   test_cross_page_write() &&
++		   test_specialized_rare_writes() &&
++		   test_illegal_rare_writes()),
++		 "static rare-write test failed"))
++		return -EFAULT;
++	pr_info("static rare_write test passed");
++	return 0;
++}
++
++module_init(test_static_rare_write_init_module);
++
++MODULE_LICENSE("GPL v2");
++MODULE_AUTHOR("Igor Stoppa <igor.stoppa@huawei.com>");
++MODULE_DESCRIPTION("Test module for static rare write.");
