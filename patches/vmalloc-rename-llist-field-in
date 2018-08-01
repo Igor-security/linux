@@ -1,0 +1,69 @@
+Bottom: c3f41313a9fb8d9eedf1e69ffe84dee56e670cab
+Top:    12fc0a88ffa19b882edfe56cd66e49e75b934acc
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-03-27 18:37:38 +0300
+
+vmalloc: rename llist field in vmap_area
+
+The vmap_area structure has a field of type struct llist_node, named
+purge_list and is used when performing lazy purge of the area.
+
+Such field is left unused during the actual utilization of the
+structure.
+
+This patch renames the field to a more generic "area_list", to allow for
+utilization outside of the purging phase.
+
+Since the purging happens after the vmap_area is dismissed, its use is
+mutually exclusive with any use performed while the area is allocated.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+Acked-by: Andrew Morton <akpm@linux-foundation.org>
+
+
+---
+
+diff --git a/include/linux/vmalloc.h b/include/linux/vmalloc.h
+index 398e9c95cd61..6b0af88f82fd 100644
+--- a/include/linux/vmalloc.h
++++ b/include/linux/vmalloc.h
+@@ -48,7 +48,7 @@ struct vmap_area {
+ 	unsigned long flags;
+ 	struct rb_node rb_node;         /* address sorted rbtree */
+ 	struct list_head list;          /* address sorted list */
+-	struct llist_node purge_list;    /* "lazy purge" list */
++	struct llist_node area_list;    /* generic list of areas */
+ 	struct vm_struct *vm;
+ 	struct rcu_head rcu_head;
+ };
+diff --git a/mm/vmalloc.c b/mm/vmalloc.c
+index 4ebc0a71e238..d9922174d276 100644
+--- a/mm/vmalloc.c
++++ b/mm/vmalloc.c
+@@ -662,7 +662,7 @@ static bool __purge_vmap_area_lazy(unsigned long start, unsigned long end)
+ 	lockdep_assert_held(&vmap_purge_lock);
+ 
+ 	valist = llist_del_all(&vmap_purge_list);
+-	llist_for_each_entry(va, valist, purge_list) {
++	llist_for_each_entry(va, valist, area_list) {
+ 		if (va->va_start < start)
+ 			start = va->va_start;
+ 		if (va->va_end > end)
+@@ -676,7 +676,7 @@ static bool __purge_vmap_area_lazy(unsigned long start, unsigned long end)
+ 	flush_tlb_kernel_range(start, end);
+ 
+ 	spin_lock(&vmap_area_lock);
+-	llist_for_each_entry_safe(va, n_va, valist, purge_list) {
++	llist_for_each_entry_safe(va, n_va, valist, area_list) {
+ 		int nr = (va->va_end - va->va_start) >> PAGE_SHIFT;
+ 
+ 		__free_vmap_area(va);
+@@ -723,7 +723,7 @@ static void free_vmap_area_noflush(struct vmap_area *va)
+ 				    &vmap_lazy_nr);
+ 
+ 	/* After this point, we may free va at any time */
+-	llist_add(&va->purge_list, &vmap_purge_list);
++	llist_add(&va->area_list, &vmap_purge_list);
+ 
+ 	if (unlikely(nr_lazy > lazy_max_pages()))
+ 		try_purge_vmap_area_lazy();
