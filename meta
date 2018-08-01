@@ -1,7 +1,8 @@
 Version: 1
-Previous: 27a4d69fd95f91d0058181572dc56d7d77a3efac
-Head: 1d3f537e32ef6ac7e3013b1b02911c3a85f440cf
+Previous: 4c07f7a2d29d84cda4753262710379a3d04554f3
+Head: c1d61e7fe3760851319138550efb732273ab2e57
 Applied:
+Unapplied:
   rename-__safe_cmp-to: 9bcb6f1baf43b8d294d5dbddefdbbdd66c9aac66
   rare-write-support-for: b78e86e8ce46de987bd0fc34b5a1f518f27980bc
   test-cases-for-rare-writes-of: 0af39de860b0bf74fc0dc34243f13e32aa0f8350
@@ -15,5 +16,4 @@ Applied:
   doubly-linked-list-using: e35e042336d4f7e7bcfd3b48bd672df37599076f
   test-cases-for-protected: d9212d1c70507a4a795c011eafe9f87074814e59
   docs: 1d3f537e32ef6ac7e3013b1b02911c3a85f440cf
-Unapplied:
 Hidden:
