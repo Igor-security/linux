@@ -13,9 +13,10 @@
 #ifndef _LINUX_RARE_WRITE_H
 #define _LINUX_RARE_WRITE_H
 
+#include <linux/mm.h>
+#include <linux/vmalloc.h>
 #include <linux/compiler.h>
 #include <linux/irqflags.h>
-#include <linux/mm.h>
 
 extern long __start_rare_write_after_init;
 extern long __end_rare_write_after_init;
