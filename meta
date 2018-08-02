@@ -1,8 +1,7 @@
 Version: 1
-Previous: 690f937b9698719b9eaa4b8d55fd6575aa030e2a
+Previous: 99509a6f582889763351229b716e14111a271283
 Head: 0881caa7ccdc592ee47310c5ca072caf0c05447f
 Applied:
-  lkdtm-tests-for-rare-write-of: 0881caa7ccdc592ee47310c5ca072caf0c05447f
 Unapplied:
   struct-page-add-field-for: 04eb204984296d46c7dc31b76e5956d52ccd27e0
   vmalloc-rename-llist-field-in: 52588d9c879caaeb8feaeac85686506ffe8c8667
