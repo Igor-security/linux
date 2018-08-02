@@ -1,7 +1,8 @@
 Version: 1
-Previous: 7768e66edb81878ca9b6d480a86c98d35b2a6127
-Head: 1d3f537e32ef6ac7e3013b1b02911c3a85f440cf
+Previous: e035bc6de404f51ef41a2798763649b3f1c05cdf
+Head: b78e86e8ce46de987bd0fc34b5a1f518f27980bc
 Applied:
+Unapplied:
   test-cases-for-rare-writes-of: 0af39de860b0bf74fc0dc34243f13e32aa0f8350
   lkdtm-tests-for-rare-write-of: e180596c6017418b1a86f5d2c6dd30da61ca8fb2
   struct-page-add-field-for: 04eb204984296d46c7dc31b76e5956d52ccd27e0
@@ -13,5 +14,4 @@ Applied:
   doubly-linked-list-using: e35e042336d4f7e7bcfd3b48bd672df37599076f
   test-cases-for-protected: d9212d1c70507a4a795c011eafe9f87074814e59
   docs: 1d3f537e32ef6ac7e3013b1b02911c3a85f440cf
-Unapplied:
 Hidden:
