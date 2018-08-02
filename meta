@@ -1,7 +1,12 @@
 Version: 1
-Previous: 725322e6fab9ca6b44e04fd8c0a16c4bf7d6c9c6
+Previous: d8784a97409b8d16fc4d384246848db816ff53e2
 Head: b3c61fb32b169e0fe6224b4b04f61d7d697bfa7a
 Applied:
+  rename-__safe_cmp-to: 885587698f90823d150eb2311e0e8bb4de92c1c2
+  rare-write-support-for: 5f6e94bac86d0344622023f0340bbae934a35425
+  test-cases-for-rare-writes-of: a3f4a464aef117fb9184236492c0e9ecf95bc5f4
+  vmalloc: 7b4b600e572fb13105a67ebdb10afed86ee9451c
+  lkdtm-tests-for-rare-write-of: b3c61fb32b169e0fe6224b4b04f61d7d697bfa7a
 Unapplied:
   vmalloc-rename-llist-field-in: e9bb0b37e2e97d44f9ce45debd77ad238737ff74
   protectable-memory-allocator: da0b4c9438f8c59e8af3c59a6b748e6bc6c22e0a

@@ -1,0 +1,26 @@
+Bottom: db78901cad957e7eeca8c2d02278501dd6b78cfc
+Top:    a1c79eda58606b498f2632b417063906dbed4179
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-08-02 04:34:16 +0300
+
+vmalloc
+
+
+---
+
+diff --git a/include/linux/rare_write.h b/include/linux/rare_write.h
+index 57ef2e7fa2f6..0ac9252a3f04 100644
+--- a/include/linux/rare_write.h
++++ b/include/linux/rare_write.h
+@@ -13,9 +13,10 @@
+ #ifndef _LINUX_RARE_WRITE_H
+ #define _LINUX_RARE_WRITE_H
+ 
++#include <linux/mm.h>
++#include <linux/vmalloc.h>
+ #include <linux/compiler.h>
+ #include <linux/irqflags.h>
+-#include <linux/mm.h>
+ 
+ extern long __start_rare_write_after_init;
+ extern long __end_rare_write_after_init;
