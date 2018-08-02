@@ -1,7 +1,11 @@
 Version: 1
-Previous: 60f64ecb1c492c3e3126993a6dd67f7f258c9c90
+Previous: e8e90e4c57fa9a95397fb92756f88c7db1234626
 Head: f9aade4a0e8862a4066e49479b039ad1b677a752
 Applied:
+  struct-page-add-field-for: 3d80965654fa4ee8fdbb1bcf74311801b3e359dd
+  rename-__safe_cmp-to: 75920d110ddd1ba3cf9b1029f5572c04a26883ac
+  rare-write-support-for: 91a88a0f05fe40a1381e6178d89be50030d612d2
+  test-cases-for-rare-writes-of: f9aade4a0e8862a4066e49479b039ad1b677a752
 Unapplied:
   lkdtm-tests-for-rare-write-of: 9434f10cf8938d306ddf7acf190d422955aad9bc
   vmalloc-rename-llist-field-in: 7fd82ef0dd0d8be09e2b5bf8a672a3ed875f441a
