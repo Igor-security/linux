@@ -1,11 +1,11 @@
 Version: 1
-Previous: 1f0965e07ecee0eabf0ef0509c3f5525ea6aac1f
-Head: 4d7a367db80050e6b95a0d322b1d522765865ba7
+Previous: fa449816ea7fa32faea8b1ec2ea1f5d44c23b1bc
+Head: d50f525ad030e4cdc14683de105ba4b0d4d403e3
 Applied:
+Unapplied:
   lkdtm-tests-for-protectable: 11e9edc5fc01aece705b9b6b6dac6278248f23c9
   use-designated-initializer-for: b0f6720e38fb8d62c5ee0edc3a613c592a7808e9
   doubly-linked-list-using: 8bdc02ed5f66cf7d0a6c70573ce99a7cc64df400
   test-cases-for-protected: 63c9893aac806ceebda13650e201ae8a44491bd1
   docs: 4d7a367db80050e6b95a0d322b1d522765865ba7
-Unapplied:
 Hidden:
