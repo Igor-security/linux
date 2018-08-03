@@ -1,13 +1,13 @@
 Version: 1
-Previous: 28b5b117277c0994a45c9e2b868a28bc026626a7
-Head: ef46808b79ebbf48587c556436e5281ec51d09b5
+Previous: 7e6860a19a6ef6c402cceaa5f74cd24042ce032b
+Head: e1b601e854ac5f30626f1eecd664eaaf516d8ad0
 Applied:
+  rename-__safe_cmp-to: c8c7d238f01d9285f6c5f33a476af9018cd052dd
+  rare-write-support-for: 67c4ef0ee832528abcf94f329eb396115624725e
+  test-cases-for-rare-writes-of: 990e3940e576709113ea0b85c32d6fd48c43255e
+  lkdtm-tests-for-rare-write-of: e1b601e854ac5f30626f1eecd664eaaf516d8ad0
 Unapplied:
   struct-page-add-field-for: 0ce01bfe9fdfa1c90307614c8917df8ecd5bc919
-  rename-__safe_cmp-to: 75920d110ddd1ba3cf9b1029f5572c04a26883ac
-  rare-write-support-for: 91a88a0f05fe40a1381e6178d89be50030d612d2
-  test-cases-for-rare-writes-of: f9aade4a0e8862a4066e49479b039ad1b677a752
-  lkdtm-tests-for-rare-write-of: 9434f10cf8938d306ddf7acf190d422955aad9bc
   vmalloc-rename-llist-field-in: 7fd82ef0dd0d8be09e2b5bf8a672a3ed875f441a
   protectable-memory-allocator: f7732004e25b8c7f9a979df8c0a357d2c4835145
   test-cases-for-protectable: d50f525ad030e4cdc14683de105ba4b0d4d403e3
