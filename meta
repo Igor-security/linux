@@ -1,8 +1,7 @@
 Version: 1
-Previous: bb9ccc828c66c90e76425d513f0f0a543c424931
+Previous: 30c6de504e365868fc5d52e6e595c28eafb30e09
 Head: 3d80965654fa4ee8fdbb1bcf74311801b3e359dd
 Applied:
-  struct-page-add-field-for: 3d80965654fa4ee8fdbb1bcf74311801b3e359dd
 Unapplied:
   rename-__safe_cmp-to: 75920d110ddd1ba3cf9b1029f5572c04a26883ac
   rare-write-support-for: 91a88a0f05fe40a1381e6178d89be50030d612d2
