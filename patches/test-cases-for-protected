@@ -1,0 +1,300 @@
+Bottom: b2ceee062b9b206b262bcb2603483aada3a891a9
+Top:    0b033f47b3c446f4a25734f3c611cb34a63299ae
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-05-31 17:12:49 +0300
+
+Test Cases for Protected Doubly Linked List
+
+These test cases focus on the basic operations required to oeprate a
+doubly linked list, in particular creating, growing, shrinking,
+destroying.
+
+They can also be useful as reference for practical use.
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+
+---
+
+diff --git a/lib/Kconfig.debug b/lib/Kconfig.debug
+index 8838d1158d19..4ada5b156510 100644
+--- a/lib/Kconfig.debug
++++ b/lib/Kconfig.debug
+@@ -2034,3 +2034,12 @@ config IO_STRICT_DEVMEM
+ 	  if the driver using a given range cannot be disabled.
+ 
+ 	  If in doubt, say Y.
++
++config DEBUG_PRLIST_TEST
++    bool "Testcase for Protected Doubly Linked List"
++    depends on STRICT_KERNEL_RWX
++    select PROTECTABLE_MEMORY
++    default n
++    ---help---
++      This option enables the testing of an implementation of double linked
++      list based on write protected memory.
+diff --git a/lib/Makefile b/lib/Makefile
+index 90dc5520b784..0dba0ec28745 100644
+--- a/lib/Makefile
++++ b/lib/Makefile
+@@ -257,3 +257,4 @@ obj-$(CONFIG_GENERIC_LIB_LSHRDI3) += lshrdi3.o
+ obj-$(CONFIG_GENERIC_LIB_MULDI3) += muldi3.o
+ obj-$(CONFIG_GENERIC_LIB_CMPDI2) += cmpdi2.o
+ obj-$(CONFIG_GENERIC_LIB_UCMPDI2) += ucmpdi2.o
++obj-$(CONFIG_DEBUG_PRLIST_TEST) += test_prlist.o
+diff --git a/lib/test_prlist.c b/lib/test_prlist.c
+new file mode 100644
+index 000000000000..4c0a6a6e74b5
+--- /dev/null
++++ b/lib/test_prlist.c
+@@ -0,0 +1,250 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * test_prlist.c: Test cases for protected doubly linked list
++ *
++ * (C) Copyright 2018 Huawei Technologies Co. Ltd.
++ * Author: Igor Stoppa <igor.stoppa@huawei.com>
++ */
++
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/mm.h>
++#include <linux/bug.h>
++#include <linux/prlist.h>
++
++
++#ifdef pr_fmt
++#undef pr_fmt
++#endif
++
++#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
++
++static struct pmalloc_pool *pool;
++
++static struct prlist_head test_prlist_head __rare_write_after_init =
++	PRLIST_HEAD_INIT(test_prlist_head.list);
++
++static bool test_init_prlist_head(void)
++{
++	if (WARN(test_prlist_head.prev != &test_prlist_head ||
++		 test_prlist_head.next != &test_prlist_head,
++		 "static initialization of static prlist_head failed"))
++		return false;
++	rare_write_ptr(&test_prlist_head.next, NULL);
++	rare_write_ptr(&test_prlist_head.prev, NULL);
++	if (WARN(test_prlist_head.prev || test_prlist_head.next,
++		 "resetting of static prlist_head failed"))
++		return false;
++	INIT_STATIC_PRLIST_HEAD(&test_prlist_head);
++	if (WARN(test_prlist_head.prev != &test_prlist_head ||
++		 test_prlist_head.next != &test_prlist_head,
++		 "initialization of static prlist_head failed"))
++		return false;
++	pr_info("initialization of static prlist_head passed");
++	return true;
++}
++
++struct prlist_data {
++	int d_int;
++	struct prlist_head node;
++	unsigned long long d_ulonglong;
++};
++
++#define LIST_INTERVAL 5
++#define LIST_INTERVALS 3
++#define LIST_NODES (LIST_INTERVALS * LIST_INTERVAL)
++static bool test_build_prlist(void)
++{
++	short i;
++	struct prlist_data *data;
++	int delta;
++
++	pool = prlist_create_pool();
++	if (WARN(!pool, "could not create pool"))
++		return false;
++
++	for (i = 0; i < LIST_NODES; i++) {
++		data = (struct prlist_data *)pmalloc(pool, sizeof(*data));
++		if (WARN(!data, "Failed to allocate prlist node"))
++			goto out;
++		pmalloc_rare_write_int(pool, &data->d_int, i);
++		pmalloc_rare_write_ulonglong(pool, &data->d_ulonglong, i);
++		prlist_add_tail(pool, &data->node, &test_prlist_head);
++	}
++	for (i = 1; i < LIST_NODES; i++) {
++		data = (struct prlist_data *)pmalloc(pool, sizeof(*data));
++		if (WARN(!data, "Failed to allocate prlist node"))
++			goto out;
++		pmalloc_rare_write_int(pool, &data->d_int, i);
++		pmalloc_rare_write_ulonglong(pool, &data->d_ulonglong, i);
++		prlist_add(pool, &data->node, &test_prlist_head);
++	}
++	i = LIST_NODES;
++	delta = -1;
++	list_for_each_entry(data, &test_prlist_head, node) {
++		i += delta;
++		if (!i)
++			delta = 1;
++		if (WARN(data->d_int != i || data->d_ulonglong != i,
++			 "unexpected value in prlist, build test failed"))
++			goto out;
++	}
++	pr_info("build prlist test passed");
++	return true;
++out:
++	pmalloc_destroy_pool(pool);
++	return false;
++}
++
++static bool test_teardown_prlist(void)
++{
++	short i;
++
++	for (i = 0; !list_empty(&test_prlist_head.list); i++)
++		prlist_del_entry(pool, test_prlist_head.next);
++	if (WARN(i != LIST_NODES * 2 - 1, "teardown prlist test failed"))
++		return false;
++	pmalloc_destroy_pool(pool);
++	pr_info("teardown prlist test passed");
++	return true;
++}
++
++static bool test_prlist(void)
++{
++	if (WARN(!(test_init_prlist_head() &&
++		   test_build_prlist() &&
++		   test_teardown_prlist()),
++		 "prlist test failed"))
++		return false;
++	pr_info("prlist test passed");
++	return true;
++}
++
++static struct prhlist_head test_prhlist_head __rare_write_after_init =
++	PRHLIST_HEAD_INIT;
++
++static bool test_init_prhlist_head(void)
++{
++	if (WARN(test_prhlist_head.first,
++		 "static initialization of static prhlist_head failed"))
++		return false;
++	rare_write_ptr(&test_prhlist_head.first, (void *)-1);
++	if (WARN(!test_prhlist_head.first,
++		 "resetting of static prhlist_head failed"))
++		return false;
++	INIT_STATIC_PRHLIST_HEAD(&test_prhlist_head);
++	if (WARN(!test_prlist_head.prev,
++		 "initialization of static prhlist_head failed"))
++		return false;
++	pr_info("initialization of static prlist_head passed");
++	return true;
++}
++
++struct prhlist_data {
++	int d_int;
++	struct prhlist_node node;
++	unsigned long long d_ulonglong;
++};
++
++static bool test_build_prhlist(void)
++{
++	short i;
++	struct prhlist_data *data;
++	struct prhlist_node *anchor;
++
++	pool = prhlist_create_pool();
++	if (WARN(!pool, "could not create pool"))
++		return false;
++
++	for (i = 2 * LIST_INTERVAL - 1; i >= LIST_INTERVAL; i--) {
++		data = (struct prhlist_data *)pmalloc(pool, sizeof(*data));
++		if (WARN(!data, "Failed to allocate prhlist node"))
++			goto out;
++		pmalloc_rare_write_int(pool, &data->d_int, i);
++		pmalloc_rare_write_ulonglong(pool, &data->d_ulonglong, i);
++		prhlist_add_head(pool, &data->node, &test_prhlist_head);
++	}
++	anchor = test_prhlist_head.first;
++	for (i = 0; i < LIST_INTERVAL; i++) {
++		data = (struct prhlist_data *)pmalloc(pool, sizeof(*data));
++		if (WARN(!data, "Failed to allocate prhlist node"))
++			goto out;
++		pmalloc_rare_write_int(pool, &data->d_int, i);
++		pmalloc_rare_write_ulonglong(pool, &data->d_ulonglong, i);
++		prhlist_add_before(pool, &data->node, anchor);
++	}
++	hlist_for_each_entry(data, &test_prhlist_head, node)
++		if (!data->node.next)
++			anchor = &data->node;
++	for (i = 3 * LIST_INTERVAL - 1; i >= 2 * LIST_INTERVAL; i--) {
++		data = (struct prhlist_data *)pmalloc(pool, sizeof(*data));
++		if (WARN(!data, "Failed to allocate prhlist node"))
++			goto out;
++		pmalloc_rare_write_int(pool, &data->d_int, i);
++		pmalloc_rare_write_ulonglong(pool, &data->d_ulonglong, i);
++		prhlist_add_behind(pool, &data->node, anchor);
++	}
++	i = 0;
++	hlist_for_each_entry(data, &test_prhlist_head, node) {
++		if (WARN(data->d_int != i || data->d_ulonglong != i,
++			 "unexpected value in prhlist, build test failed"))
++			goto out;
++		i++;
++	}
++	if (WARN(i != LIST_NODES,
++		 "wrong number of nodes: %d, expectd %d", i, LIST_NODES))
++		goto out;
++	pr_info("build prhlist test passed");
++	return true;
++out:
++	pmalloc_destroy_pool(pool);
++	return false;
++}
++
++static bool test_teardown_prhlist(void)
++{
++	struct prhlist_node **pnode;
++	bool retval = false;
++
++	for (pnode = &test_prhlist_head.first->next; *pnode;) {
++		if (WARN(*(*pnode)->pprev != *pnode,
++			 "inconsistent pprev value, delete test failed"))
++			goto err;
++		prhlist_del(pool, *pnode);
++	}
++	prhlist_del(pool, test_prhlist_head.first);
++	if (WARN(!hlist_empty(&test_prhlist_head.head),
++		 "prhlist is not empty, delete test failed"))
++		goto err;
++	pr_info("deletion of prhlist passed");
++	retval = true;
++err:
++	pmalloc_destroy_pool(pool);
++	return retval;
++}
++
++static bool test_prhlist(void)
++{
++	if (WARN(!(test_init_prhlist_head() &&
++		   test_build_prhlist() &&
++		   test_teardown_prhlist()),
++		 "prhlist test failed"))
++		return false;
++	pr_info("prhlist test passed");
++	return true;
++}
++
++static int __init test_prlists_init_module(void)
++{
++	if (WARN(!(test_prlist() && test_prhlist()),
++		 "prlists test failed"))
++		return -EFAULT;
++	pr_info("protected lists test passed");
++	return 0;
++}
++
++module_init(test_prlists_init_module);
++
++MODULE_LICENSE("GPL v2");
++MODULE_AUTHOR("Igor Stoppa <igor.stoppa@huawei.com>");
++MODULE_DESCRIPTION("Test module for protected doubly linked list.");
