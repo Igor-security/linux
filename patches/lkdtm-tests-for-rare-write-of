@@ -1,0 +1,88 @@
+Bottom: cd053e4e99488e1a9ec160e6ad01971d8c2ee2d2
+Top:    47d500c507b35ccb1385fb5da5bbc80881f00f80
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-05-20 23:19:59 +0300
+
+lkdtm tests for rare write of static allocations
+
+Add crash tests for verifying that static data labelled as
+__rare_write_after_init is effectively:
+- writable during init
+- write protected after init has concluded
+
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+
+---
+
+diff --git a/drivers/misc/lkdtm/core.c b/drivers/misc/lkdtm/core.c
+index 2154d1bfd18b..33b75f3f7590 100644
+--- a/drivers/misc/lkdtm/core.c
++++ b/drivers/misc/lkdtm/core.c
+@@ -155,6 +155,7 @@ static const struct crashtype crashtypes[] = {
+ 	CRASHTYPE(ACCESS_USERSPACE),
+ 	CRASHTYPE(WRITE_RO),
+ 	CRASHTYPE(WRITE_RO_AFTER_INIT),
++	CRASHTYPE(WRITE_RARE_WRITE_AFTER_INIT),
+ 	CRASHTYPE(WRITE_KERN),
+ 	CRASHTYPE(REFCOUNT_INC_OVERFLOW),
+ 	CRASHTYPE(REFCOUNT_ADD_OVERFLOW),
+diff --git a/drivers/misc/lkdtm/lkdtm.h b/drivers/misc/lkdtm/lkdtm.h
+index 9e513dcfd809..9f91c916a902 100644
+--- a/drivers/misc/lkdtm/lkdtm.h
++++ b/drivers/misc/lkdtm/lkdtm.h
+@@ -38,6 +38,7 @@ void lkdtm_READ_BUDDY_AFTER_FREE(void);
+ void __init lkdtm_perms_init(void);
+ void lkdtm_WRITE_RO(void);
+ void lkdtm_WRITE_RO_AFTER_INIT(void);
++void lkdtm_WRITE_RARE_WRITE_AFTER_INIT(void);
+ void lkdtm_WRITE_KERN(void);
+ void lkdtm_EXEC_DATA(void);
+ void lkdtm_EXEC_STACK(void);
+diff --git a/drivers/misc/lkdtm/perms.c b/drivers/misc/lkdtm/perms.c
+index 53b85c9d16b8..6ad416b51328 100644
+--- a/drivers/misc/lkdtm/perms.c
++++ b/drivers/misc/lkdtm/perms.c
+@@ -27,6 +27,10 @@ static const unsigned long rodata = 0xAA55AA55;
+ /* This is marked __ro_after_init, so it should ultimately be .rodata. */
+ static unsigned long ro_after_init __ro_after_init = 0x55AA5500;
+ 
++/* This is marked __rare_write_after_init, so it should be in .rodata. */
++static
++unsigned long rare_write_after_init __rare_write_after_init = 0x55AA5500;
++
+ /*
+  * This just returns to the caller. It is designed to be copied into
+  * non-executable memory regions.
+@@ -104,6 +108,24 @@ void lkdtm_WRITE_RO_AFTER_INIT(void)
+ 	*ptr ^= 0xabcd1234;
+ }
+ 
++void lkdtm_WRITE_RARE_WRITE_AFTER_INIT(void)
++{
++	unsigned long *ptr = &rare_write_after_init;
++
++	/*
++	 * Verify we were written to during init. Since an Oops
++	 * is considered a "success", a failure is to just skip the
++	 * real test.
++	 */
++	if ((*ptr & 0xAA) != 0xAA) {
++		pr_info("%p was NOT written during init!?\n", ptr);
++		return;
++	}
++
++	pr_info("attempting bad rare_write_after_init write at %p\n", ptr);
++	*ptr ^= 0xabcd1234;
++}
++
+ void lkdtm_WRITE_KERN(void)
+ {
+ 	size_t size;
+@@ -200,4 +222,6 @@ void __init lkdtm_perms_init(void)
+ 	/* Make sure we can write to __ro_after_init values during __init */
+ 	ro_after_init |= 0xAA;
+ 
++	/* Make sure we can write to __rare_write_after_init during __init */
++	rare_write_after_init |= 0xAA;
+ }

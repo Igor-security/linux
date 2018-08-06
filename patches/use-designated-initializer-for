@@ -1,0 +1,26 @@
+Bottom: 703ce7334942304144f2d79866f243be79bf9a30
+Top:    185df96ba224530c77db118f86b98970adb26690
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-06-07 16:06:51 +0300
+
+Use designated initializer for struct list_head in list.h
+
+
+---
+
+diff --git a/include/linux/list.h b/include/linux/list.h
+index 4b129df4d46b..11847c96571f 100644
+--- a/include/linux/list.h
++++ b/include/linux/list.h
+@@ -18,7 +18,10 @@
+  * using the generic single-entry routines.
+  */
+ 
+-#define LIST_HEAD_INIT(name) { &(name), &(name) }
++#define LIST_HEAD_INIT(name) {	\
++	.next = &(name),	\
++	.prev = &(name),	\
++}
+ 
+ #define LIST_HEAD(name) \
+ 	struct list_head name = LIST_HEAD_INIT(name)
