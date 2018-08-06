@@ -1,7 +1,8 @@
 Version: 1
-Previous: ce24741d21708f08396f4a9a1c0074285f91ab16
-Head: 38cc0bfdef897be190ba40e575d9aa665bc859dd
+Previous: bf0b917f436f43598e5ebacab9601bba1765dcc7
+Head: fa8a037a9f6bc700fa386a46efe3b2e6d5593410
 Applied:
+Unapplied:
   rare-write-support-for: 271330c97a5c7400cb1d45e6ad3dd003d99c2700
   test-cases-for-rare-writes-of: f722ca02fa612ad43acf9660ea488e4f039d1adb
   lkdtm-tests-for-rare-write-of: af3a556350a9fbad5804ddf66a9754069c350598
@@ -14,5 +15,4 @@ Applied:
   doubly-linked-list-using: 368aac5562eac989e3f149c9888e0c56fe17ab42
   test-cases-for-protected: 0b4c468122ce19de2f9374263ffa43bd03e7a80a
   docs: 38cc0bfdef897be190ba40e575d9aa665bc859dd
-Unapplied:
 Hidden:
