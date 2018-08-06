@@ -1,7 +1,8 @@
 Version: 1
-Previous: bf0b917f436f43598e5ebacab9601bba1765dcc7
+Previous: 2f7641f62750fab52271c8f42e8b6abfe12e33c5
 Head: fa8a037a9f6bc700fa386a46efe3b2e6d5593410
 Applied:
+  rename-__safe_cmp-to: fa8a037a9f6bc700fa386a46efe3b2e6d5593410
 Unapplied:
   rare-write-support-for: 271330c97a5c7400cb1d45e6ad3dd003d99c2700
   test-cases-for-rare-writes-of: f722ca02fa612ad43acf9660ea488e4f039d1adb
