@@ -1,9 +1,9 @@
 Version: 1
-Previous: 7acba11463a59d71d1dc2ea4b1306b1b573f33be
-Head: 1ffaddd029c867d134a1dde39f540dcc8c52e274
+Previous: 476deb818147412e123c788f2a969dd8afb93a0e
+Head: fa8a037a9f6bc700fa386a46efe3b2e6d5593410
 Applied:
-Unapplied:
   rename-__safe_cmp-to: fa8a037a9f6bc700fa386a46efe3b2e6d5593410
+Unapplied:
   rare-write-support-for: 271330c97a5c7400cb1d45e6ad3dd003d99c2700
   test-cases-for-rare-writes-of: f722ca02fa612ad43acf9660ea488e4f039d1adb
   lkdtm-tests-for-rare-write-of: af3a556350a9fbad5804ddf66a9754069c350598
