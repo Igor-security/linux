@@ -1,8 +1,7 @@
 Version: 1
-Previous: c628daf07649005f7f86419bca407fe72087a174
+Previous: 5c4c6fd8d2bb42534cccf900299a73ce9aae2a2b
 Head: 2201378aa47521874810bab50b77c78b4b1871c6
 Applied:
-  rare-write-support-for: 2201378aa47521874810bab50b77c78b4b1871c6
 Unapplied:
   test-cases-for-rare-writes-of: f722ca02fa612ad43acf9660ea488e4f039d1adb
   lkdtm-tests-for-rare-write-of: af3a556350a9fbad5804ddf66a9754069c350598
