@@ -1,9 +1,9 @@
 Version: 1
-Previous: 26abd98741223f7bb4e402b214cba003959991e2
-Head: 2201378aa47521874810bab50b77c78b4b1871c6
+Previous: d981d208156f47c302e4a3f2d0fdf7f817b32e4c
+Head: bc237a32dc3a1e1e88829a7193b1318404eda6bf
 Applied:
-  rare-write-support-for: 2201378aa47521874810bab50b77c78b4b1871c6
 Unapplied:
+  rare-write-support-for: 2201378aa47521874810bab50b77c78b4b1871c6
   test-cases-for-rare-writes-of: f722ca02fa612ad43acf9660ea488e4f039d1adb
   lkdtm-tests-for-rare-write-of: af3a556350a9fbad5804ddf66a9754069c350598
   struct-page-add-field-for: 6d50a998d40a478ff4610395bb6f2fb9fd11885d
