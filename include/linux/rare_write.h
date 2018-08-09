@@ -63,13 +63,13 @@ bool __raw_rare_write(const void *dst, const void *src,
 		else if (type == RARE_WRITE_VMALLOC_ADDR)
 			page = vmalloc_to_page(dst);
 		else
-			return false;
-		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
-		if (WARN(!base, "failed to remap rare-write page"))
-			return false;
+			goto err;
 		offset = (unsigned long)dst & ~PAGE_MASK;
 		offset_complement = ((size_t)PAGE_SIZE) - offset;
 		size = min(((int)n_bytes), ((int)offset_complement));
+		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
+		if (WARN(!base, "failed to remap rare-write page"))
+			goto err;
 		__write_once_size(base + offset, src, size);
 		vunmap(base);
 		dst += size;
@@ -78,6 +78,9 @@ bool __raw_rare_write(const void *dst, const void *src,
 		local_irq_restore(flags);
 	}
 	return true;
+err:
+	local_irq_restore(flags);
+	return false;
 }
 
 static __always_inline
