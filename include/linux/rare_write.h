@@ -168,8 +168,11 @@ bool rare_write_ptr(const void *dst, const void *val)
 		     sizeof(*(unique_src_ptr)));			\
 })
 
+#define __safe_ops(dst, src)	\
+	(__typecheck(dst, src) && __no_side_effects(dst, src))
+
 #define rare_write(dst_ptr, src_ptr)					\
-	__builtin_choose_expr(__typecheck(dst_ptr, src_ptr),		\
+	__builtin_choose_expr(__safe_ops(dst_ptr, src_ptr),		\
 			      __rare_write_simple(dst_ptr, src_ptr),	\
 			      __rare_write_safe(dst_ptr, src_ptr,	\
 						__UNIQUE_ID(__dst_ptr),	\
