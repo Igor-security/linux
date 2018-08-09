@@ -1,0 +1,42 @@
+Bottom: fd9d1aa8d438444544a235eb9f791d09afa78f8a
+Top:    f7203c5c36122ee72de13ded55b2be232a165141
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-08-09 17:32:00 +0300
+
+rare
+
+
+---
+
+diff --git a/include/linux/rare_write.h b/include/linux/rare_write.h
+index 0ac9252a3f04..ef8d61f1d6ea 100644
+--- a/include/linux/rare_write.h
++++ b/include/linux/rare_write.h
+@@ -63,13 +63,13 @@ bool __raw_rare_write(const void *dst, const void *src,
+ 		else if (type == RARE_WRITE_VMALLOC_ADDR)
+ 			page = vmalloc_to_page(dst);
+ 		else
+-			return false;
+-		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
+-		if (WARN(!base, "failed to remap rare-write page"))
+-			return false;
++			goto err;
+ 		offset = (unsigned long)dst & ~PAGE_MASK;
+ 		offset_complement = ((size_t)PAGE_SIZE) - offset;
+ 		size = min(((int)n_bytes), ((int)offset_complement));
++		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
++		if (WARN(!base, "failed to remap rare-write page"))
++			goto err;
+ 		__write_once_size(base + offset, src, size);
+ 		vunmap(base);
+ 		dst += size;
+@@ -78,6 +78,9 @@ bool __raw_rare_write(const void *dst, const void *src,
+ 		local_irq_restore(flags);
+ 	}
+ 	return true;
++err:
++	local_irq_restore(flags);
++	return false;
+ }
+ 
+ static __always_inline
