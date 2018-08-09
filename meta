@@ -1,8 +1,7 @@
 Version: 1
-Previous: 75af6799e1cac15c47cd484cd6e35ce230de4765
+Previous: 00a7e0c8f815de17258e600579c0f351ca23248e
 Head: d49d9c5d3e05672b6697e33e3912b795263a7304
 Applied:
-  rare: d49d9c5d3e05672b6697e33e3912b795263a7304
 Unapplied:
   test-cases-for-rare-writes-of: ebeaa9fe693e18272fdaf24813c1c1c0c558e1ad
   lkdtm-tests-for-rare-write-of: a8f323d9ea8530167799c7e633d3d2510984e55d
