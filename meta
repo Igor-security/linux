@@ -1,8 +1,6 @@
 Version: 1
-Previous: c9bb6fb8dbf6bfacd20cab20aed121599981988e
+Previous: 3fbab246ca096a60866c80f3e501a537ad5a9166
 Head: 46db7c8233c6e989755cc4f6b936968a27ee6afa
 Applied:
-  docs: e437e0e40f2fe807d51daeaceed804870f76697a
-  rename-__safe_cmp-to: 46db7c8233c6e989755cc4f6b936968a27ee6afa
 Unapplied:
 Hidden:
