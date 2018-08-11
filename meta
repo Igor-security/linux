@@ -1,18 +1,6 @@
 Version: 1
-Previous: 90a6e71a259a05e521e44ec90170350b55014a1b
+Previous: 8510a84918634823b789f5097431ce877ff1003b
 Head: 707c14fb612ce77833d06bc6966376eebeda4e74
 Applied:
-  test-cases-for-rare-writes-of: 084d78d66f48959bcb0201b1b085b0669d9d6a9a
-  lkdtm-tests-for-rare-write-of: 6bdcb586a34bb91ab39ca2f0741b25695e4bad3c
-  struct-page-add-field-for: 6deced09b4042d8f069970ebe10d33d8698d04f0
-  vmalloc-rename-llist-field-in: ae7cd2f4b2257fed08f555d523911cf3d80ebf98
-  protectable-memory-allocator: 4d3d9f1ee6d0e5e6bb93a14321b3aa4f74aa89b0
-  test-cases-for-protectable: 9d4fc9672c3498518ce15e98378f1bdfaedd16ff
-  lkdtm-tests-for-protectable: 799189f3be09a27cf8c439f1f01f68c8d91d9f79
-  use-designated-initializer-for: 3331a9950f3e7edfc0257daa96d4533f6ac0f926
-  doubly-linked-list-using: 211c0d278aad3e7a3c46cb30851cfecf3b6bab53
-  test-cases-for-protected: e878ecf3af7e1b7c8eef23db1ef8f5d7fdba02ee
-  docs: d902a89932fa470ad7134f29e3e6a2de9d24bb8e
-  rename-__safe_cmp-to: 707c14fb612ce77833d06bc6966376eebeda4e74
 Unapplied:
 Hidden:
