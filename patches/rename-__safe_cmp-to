@@ -1,0 +1,41 @@
+Bottom: 8663b2b367cf53b57666ea7126b6c70573515218
+Top:    444dad9f154f488e8d0cf0a5360e6885404a0d09
+Author: Igor Stoppa <igor.stoppa@huawei.com>
+Date:   2018-05-20 14:41:47 +0300
+
+Rename __safe_cmp to __safe_operands
+
+The macro __safe_cmp, introduced in commit 3c8ba0d61d04c, can be used in a
+broader context, to test for side effects, when passing parameters to macros.
+
+For this purpose, it can be renamed to a more neutral "__safe_operands".
+
+CC: Linus Torvalds <torvalds@linux-foundation.org>
+CC: Martin Uecker <Martin.Uecker@med.uni-goettingen.de>
+CC: Kees Cook <keescook@chromium.org>
+Signed-off-by: Igor Stoppa <igor.stoppa@huawei.com>
+
+
+---
+
+diff --git a/include/linux/kernel.h b/include/linux/kernel.h
+index 941dc0a5a877..04439d547be1 100644
+--- a/include/linux/kernel.h
++++ b/include/linux/kernel.h
+@@ -822,7 +822,7 @@ static inline void ftrace_dump(enum ftrace_dump_mode oops_dump_mode) { }
+ #define __no_side_effects(x, y) \
+ 		(__is_constexpr(x) && __is_constexpr(y))
+ 
+-#define __safe_cmp(x, y) \
++#define __safe_operands(x, y) \
+ 		(__typecheck(x, y) && __no_side_effects(x, y))
+ 
+ #define __cmp(x, y, op)	((x) op (y) ? (x) : (y))
+@@ -833,7 +833,7 @@ static inline void ftrace_dump(enum ftrace_dump_mode oops_dump_mode) { }
+ 		__cmp(unique_x, unique_y, op); })
+ 
+ #define __careful_cmp(x, y, op) \
+-	__builtin_choose_expr(__safe_cmp(x, y), \
++	__builtin_choose_expr(__safe_operands(x, y), \
+ 		__cmp(x, y, op), \
+ 		__cmp_once(x, y, __UNIQUE_ID(__x), __UNIQUE_ID(__y), op))
