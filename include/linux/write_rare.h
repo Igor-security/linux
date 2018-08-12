@@ -21,6 +21,11 @@
 extern long __start_wr_after_init;
 extern long __end_wr_after_init;
 
+enum wr_type {
+	WR_VIRT_ADDR,		/* for __wr_after_init data */
+	WR_VMALLOC_ADDR,	/* for dynamically allocated data */
+};
+
 /**
  * wr_check_boundaries - verifies range correctness
  * @dst: beginning of the memory to alter
@@ -33,29 +38,51 @@ extern long __end_wr_after_init;
  * other area.
  */
 static __always_inline
-bool wr_check_boundaries(const void *dst, size_t size)
+bool wr_check_boundaries(const void *ptr, size_t size)
 {
 	size_t start = (size_t)&__start_wr_after_init;
 	size_t end = (size_t)&__end_wr_after_init;
-	size_t low = (size_t)dst;
-	size_t high = (size_t)dst + size;
+	size_t low = (size_t)ptr;
+	size_t high = (size_t)ptr + size;
 
 	return likely(start <= low && low < high && high <= end);
 }
 
-/*
- * This is the core of the write rare memset functionality.
- * It doesn't perform any check on the validity of the target.
- * The wrapper using it is supposed to apply sensible verification
- * criteria.
+static inline bool wr_check_pool(const void *ptr, size_t size)
+{
+	struct vmap_area *area;
+
+	if (!is_vmalloc_addr(ptr))
+		return false;
+	area = find_vmap_area((unsigned long)ptr);
+	return area && area->vm && (area->vm->size >= size) &&
+		((area->vm->flags & (VM_PMALLOC | VM_PMALLOC_WR)) ==
+		 (VM_PMALLOC | VM_PMALLOC_WR));
+}
+
+/**
+ * wr_memset - sets n bytes of the destination to a specified value,
+ *             within the boundaries of the __wr_after_init segment
+ * @dst: beginning of the memory to write to
+ * @c: byte to replicate
+ * @size: amount of bytes to copy
+ *
+ * Returns true on success, false otherwise.
  */
 static __always_inline
-bool __raw_wr_memset(const void *dst, const int c, size_t n_bytes)
+bool wr_memset(const void *dst, const int c, size_t n_bytes)
 {
 	size_t size;
 	unsigned long flags;
 	const void *d = dst;
+	enum wr_type type;
 
+	if (wr_check_boundaries(dst, n_bytes))
+		type = WR_VIRT_ADDR;
+	else if (likely(wr_check_pool(dst, n_bytes)))
+		type = WR_VMALLOC_ADDR;
+	else
+		return false;
 	while (n_bytes) {
 		struct page *page;
 		void *base;
@@ -63,7 +90,12 @@ bool __raw_wr_memset(const void *dst, const int c, size_t n_bytes)
 		size_t offset_complement;
 
 		local_irq_save(flags);
-		page = virt_to_page(d);
+		if (type == WR_VIRT_ADDR)
+			page = virt_to_page(d);
+		else if (type == WR_VMALLOC_ADDR)
+			page = vmalloc_to_page(d);
+		else
+			goto err;
 		offset = (unsigned long)d & ~PAGE_MASK;
 		offset_complement = ((size_t)PAGE_SIZE) - offset;
 		size = min(((int)n_bytes), ((int)offset_complement));
@@ -82,38 +114,23 @@ err:
 	return false;
 }
 
-/**
- * wr_memset - sets n bytes of the destination to a specified value,
- *             within the boundaries of the __wr_after_init segment
- * @dst: beginning of the memory to write to
- * @c: byte to replicate
- * @size: amount of bytes to copy
- *
- * Returns true on success, false otherwise.
- */
 static __always_inline
-bool wr_memset(const void *dst, const int c, size_t n_bytes)
-{
-	if (WARN(!wr_check_boundaries(dst, n_bytes),
-		 "Not a valid write rare destination."))
-		return false;
-	return __raw_wr_memset(dst, c, n_bytes);
-}
-
-/*
- * This is the core of the write rare copy functionality.
- * It doesn't perform any check on the validity of the target.
- * The wrapper using it is supposed to apply sensible verification
- * criteria.
- */
-static __always_inline
-bool __raw_wr_copy(const void *dst, const void *const src, size_t n_bytes)
+bool wr_copy(const void *dst, const void *src, size_t n_bytes)
 {
 	size_t size;
 	unsigned long flags;
 	const void *d = dst;
 	const void *s = src;
+	enum wr_type type;
 
+	if (wr_check_boundaries(dst, n_bytes))
+		type = WR_VIRT_ADDR;
+	else if (wr_check_pool(dst, n_bytes))
+		type = WR_VMALLOC_ADDR;
+	else {
+		WARN_ON("Attempted write rare on invalid memory.");
+		return false;
+	}
 	while (n_bytes) {
 		struct page *page;
 		void *base;
@@ -121,7 +138,12 @@ bool __raw_wr_copy(const void *dst, const void *const src, size_t n_bytes)
 		size_t offset_complement;
 
 		local_irq_save(flags);
-		page = virt_to_page(d);
+		if (type == WR_VIRT_ADDR)
+			page = virt_to_page(d);
+		else if (type == WR_VMALLOC_ADDR)
+			page = vmalloc_to_page(d);
+		else
+			goto err;
 		offset = (unsigned long)d & ~PAGE_MASK;
 		offset_complement = ((size_t)PAGE_SIZE) - offset;
 		size = min(((int)n_bytes), ((int)offset_complement));
@@ -141,24 +163,6 @@ err:
 	return false;
 }
 
-/**
- * wr_copy - copies n bytes from source to destination, within the
- *            boundaries of the __wr_after_init segment
- * @dst: beginning of the memory to copy to
- * @src: beginning of the memory to copy from
- * @size: amount of bytes to copy
- *
- * Returns true on success, false otherwise.
- */
-static __always_inline
-bool wr_copy(const void *dst, const void *src, size_t n_bytes)
-{
-	if (WARN(!wr_check_boundaries(dst, n_bytes),
-		 "Not a valid write rare destination."))
-		return false;
-	return __raw_wr_copy(dst, src, n_bytes);
-}
-
 #define __wr_simple(dst_ptr, src_ptr)					\
 	wr_copy(dst_ptr, src_ptr, sizeof(*(src_ptr)))
 
@@ -168,7 +172,7 @@ bool wr_copy(const void *dst, const void *src, size_t n_bytes)
 	typeof(dst_ptr) unique_dst_ptr = (dst_ptr);			\
 	typeof(src_ptr) unique_src_ptr = (src_ptr);			\
 									\
-	wr_copy(unique_dst_ptr, unique_src_ptr,			\
+	wr_copy(unique_dst_ptr, unique_src_ptr,				\
 		     sizeof(*(unique_src_ptr)));			\
 })
 
