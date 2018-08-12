@@ -21,6 +21,11 @@
 extern long __start_rare_write_after_init;
 extern long __end_rare_write_after_init;
 
+enum rare_write_type {
+	RARE_WRITE_VIRT_ADDR,
+	RARE_WRITE_VMALLOC_ADDR,
+};
+
 /**
  * rare_write_check_boundaries - verifies range correctness
  * @dst: beginning of the memory to alter
@@ -47,10 +52,12 @@ bool rare_write_check_boundaries(const void *dst, size_t size)
  * This is the core of the rare write functionality.
  * It doesn't perform any check on the validity of the target.
  * The wrapper using it is supposed to apply sensible verification
- * criteria.
+ * criteria, depending on the specific use-case and, to minimize
+ * run-time checks, also specify the type of memory being modified.
  */
 static __always_inline
-bool __raw_rare_write(const void *dst, const void *const src, size_t n_bytes)
+bool __raw_rare_write(const void *dst, const void *const src,
+		      enum rare_write_type type, size_t n_bytes)
 {
 	size_t size;
 	unsigned long flags;
@@ -64,7 +71,12 @@ bool __raw_rare_write(const void *dst, const void *const src, size_t n_bytes)
 		size_t offset_complement;
 
 		local_irq_save(flags);
-		page = virt_to_page(d);
+		if (type == RARE_WRITE_VIRT_ADDR)
+			page = virt_to_page(d);
+		else if (type == RARE_WRITE_VMALLOC_ADDR)
+			page = vmalloc_to_page(d);
+		else
+			goto err;
 		offset = (unsigned long)d & ~PAGE_MASK;
 		offset_complement = ((size_t)PAGE_SIZE) - offset;
 		size = min(((int)n_bytes), ((int)offset_complement));
@@ -99,7 +111,7 @@ bool rare_write_array(const void *dst, const void *src, size_t n_bytes)
 	if (WARN(!rare_write_check_boundaries(dst, n_bytes),
 		 "Not a valid rare_write destination."))
 		return false;
-	return __raw_rare_write(dst, src, n_bytes);
+	return __raw_rare_write(dst, src, RARE_WRITE_VIRT_ADDR, n_bytes);
 
 }
 
