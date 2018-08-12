@@ -1,7 +1,8 @@
 Version: 1
-Previous: edef920a2e3969a4220e550387540ace92595fe8
-Head: 98f1b659265b5e32f044b5566fa20c4a78dd009d
+Previous: 0a0421d6473f7e23ad00d448bf39cbe1fe4f3371
+Head: 044aaeb3d0722453491e566ff1d394d30b7d848c
 Applied:
+Unapplied:
   test-cases-for-rare-writes-of: 666f3a268b3c0dbb256234ab03bb9a9525ff86e8
   lkdtm-tests-for-rare-write-of: 2890bf63e645dd94a650baa9f249ea2e3bcc5b5b
   struct-page-add-field-for: dae1ddce4677128f60b1cf33b5e6c8ba0a9947b6
@@ -12,7 +13,6 @@ Applied:
   use-designated-initializer-for: f2ab7179acfb6f96f6fe1f9680943fbe22ed1a44
   doubly-linked-list-using: 3edc99966e9462c09b03ca36a380a3ddc984fd59
   test-cases-for-protected: 98f1b659265b5e32f044b5566fa20c4a78dd009d
-Unapplied:
   docs: a8866de5ca4f208ea37fdb75fed7570afb452c5b
   rename-__safe_cmp-to: d5e5c7929c1af243eca75d0843ac4d2a66bbba91
 Hidden:
