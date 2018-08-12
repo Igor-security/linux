@@ -21,6 +21,11 @@
 extern long __start_wr_after_init;
 extern long __end_wr_after_init;
 
+enum wr_type {
+	WR_VIRT_ADDR,		/* for __wr_after_init data */
+	WR_VMALLOC_ADDR,	/* for dynamically allocated data */
+};
+
 /**
  * wr_check_boundaries - verifies range correctness
  * @dst: beginning of the memory to alter
@@ -47,10 +52,12 @@ bool wr_check_boundaries(const void *dst, size_t size)
  * This is the core of the rare write functionality.
  * It doesn't perform any check on the validity of the target.
  * The wrapper using it is supposed to apply sensible verification
- * criteria.
+ * criteria, depending on the specific use-case and, to minimize
+ * run-time checks, also specify the type of memory being modified.
  */
 static __always_inline
-bool __raw_wr(const void *dst, const void *const src, size_t n_bytes)
+bool __raw_wr(const void *dst, const void *const src, enum wr_type type,
+	      size_t n_bytes)
 {
 	size_t size;
 	unsigned long flags;
@@ -64,12 +71,17 @@ bool __raw_wr(const void *dst, const void *const src, size_t n_bytes)
 		size_t offset_complement;
 
 		local_irq_save(flags);
-		page = virt_to_page(d);
+		if (type == WR_VIRT_ADDR)
+			page = virt_to_page(d);
+		else if (type == WR_VMALLOC_ADDR)
+			page = vmalloc_to_page(d);
+		else
+			goto err;
 		offset = (unsigned long)d & ~PAGE_MASK;
 		offset_complement = ((size_t)PAGE_SIZE) - offset;
 		size = min(((int)n_bytes), ((int)offset_complement));
 		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
-		if (WARN(!base, "failed to remap rare-write page"))
+		if (WARN(!base, "failed to remap write rare page"))
 			goto err;
 		__write_once_size(base + offset, (void *)s, size);
 		vunmap(base);
@@ -85,7 +97,8 @@ err:
 }
 
 /**
- * wr_array - copies n bytes from source to destination
+ * wr_array - copies n bytes from source to destination, within the
+ *            boundaries of the __wr_after_init segment
  * @dst: beginning of the memory to copy to
  * @src: beginning of the memory to copy from
  * @size: amount of bytes to copy
@@ -98,8 +111,7 @@ bool wr_array(const void *dst, const void *src, size_t n_bytes)
 	if (WARN(!wr_check_boundaries(dst, n_bytes),
 		 "Not a valid write rare destination."))
 		return false;
-	return __raw_wr(dst, src, n_bytes);
-
+	return __raw_wr(dst, src, WR_VIRT_ADDR, n_bytes);
 }
 
 #define __wr_simple(dst_ptr, src_ptr)					\
