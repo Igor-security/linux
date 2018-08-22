@@ -75,30 +75,41 @@ void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
  * A pool can be set either for rare-write or read-only mode.
  * In both cases, it can be managed either manually or automatically.
  */
-#define PMALLOC_RO		0x00
-#define PMALLOC_RW		0x01
-#define PMALLOC_AUTO		0x02
-#define PMALLOC_MANUAL_RO	PMALLOC_RO
-#define PMALLOC_MANUAL_RW	PMALLOC_RW
-#define PMALLOC_AUTO_RO		(PMALLOC_RO | PMALLOC_AUTO)
-#define PMALLOC_AUTO_RW		(PMALLOC_RW | PMALLOC_AUTO)
+#define PMALLOC_POOL_RO			0x00
+#define PMALLOC_POOL_RW			0x01
+#define PMALLOC_POOL_AUTO_PROTECT	0x02
+#define PMALLOC_POOL_START_PROTECTED	0x04
+#define PMALLOC_POOL_MASK		(PMALLOC_POOL_RW | \
+					 PMALLOC_POOL_AUTO_PROTECT | \
+					 PMALLOC_POOL_START_PROTECTED)
+#define PMALLOC_POOL_AUTO_RO		(PMALLOC_POOL_AUTO_PROTECT | \
+					 PMALLOC_POOL_RO)
+#define PMALLOC_POOL_AUTO_RW		(PMALLOC_POOL_AUTO_PROTECT | \
+					 PMALLOC_POOL_RW)
 
-#define VM_PMALLOC_PROTECTED_MASK (VM_PMALLOC | VM_PMALLOC_PROTECTED)
-#define VM_PMALLOC_REWRITABLE_MASK \
-	(VM_PMALLOC | VM_PMALLOC_REWRITABLE)
-#define VM_PMALLOC_PROTECTED_REWRITABLE_MASK \
-	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
 #define VM_PMALLOC_MASK \
 	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
+
+#define VM_PMALLOC_PROTECTED_MASK \
+	(VM_PMALLOC | VM_PMALLOC_PROTECTED)
+#define VM_PMALLOC_READ_ONLY_MASK VM_PMALLOC_PROTECTED_MASK
+
+#define VM_PMALLOC_REWRITABLE_MASK \
+	(VM_PMALLOC | VM_PMALLOC_REWRITABLE)
+#define VM_PMALLOC_READ_WRITE_MASK VM_PMALLOC_REWRITABLE_MASK
+
+#define VM_PMALLOC_RARE_WRITE_MASK \
+	(VM_PMALLOC | VM_PMALLOC_REWRITABLE | VM_PMALLOC_PROTECTED)
+
 
 
 struct pmalloc_pool {
 	struct mutex mutex;
 	struct list_head pool_node;
 	struct llist_head vm_areas;
+	size_t align;
 	size_t refill;
 	size_t offset;
-	size_t align;
 	uint8_t mode;
 };
 
@@ -120,7 +131,7 @@ static __always_inline unsigned long __area_flags(struct vmap_area *area)
 static __always_inline
 void __tag_area(struct vmap_area *area, uint32_t mask)
 {
-	area->vm->flags |= mask;
+	area->vm->flags |= (mask & VM_PMALLOC_MASK);
 }
 
 static __always_inline void __untag_area(struct vmap_area *area)
@@ -138,79 +149,22 @@ struct vmap_area *__current_area(struct pmalloc_pool *pool)
 static __always_inline
 bool __area_matches_mask(struct vmap_area *area, unsigned long mask)
 {
-	return (area->vm->flags & mask) == mask;
+	return (area->vm->flags & VM_PMALLOC_MASK) == mask;
 }
 
 static __always_inline bool __is_area_protected(struct vmap_area *area)
 {
-	return __area_matches_mask(area, VM_PMALLOC_PROTECTED_MASK);
+	return (__area_flags(area) & VM_PMALLOC_PROTECTED_MASK) ==
+		VM_PMALLOC_PROTECTED_MASK;
 }
 
 static __always_inline bool __is_area_rewritable(struct vmap_area *area)
 {
-	return __area_matches_mask(area, VM_PMALLOC_REWRITABLE_MASK);
+	return (__area_flags(area) & VM_PMALLOC_REWRITABLE_MASK) ==
+		VM_PMALLOC_REWRITABLE_MASK;
 }
 
-static __always_inline void __protect_area(struct vmap_area *area)
-{
-	WARN(__is_area_protected(area),
-	     "Attempting to protect already protected area %pK", area);
-	set_memory_ro(area->va_start, area->vm->nr_pages);
-	area->vm->flags |= VM_PMALLOC_PROTECTED_MASK;
-}
-
-static __always_inline void __make_area_ro(struct vmap_area *area)
-{
-	area->vm->flags &= ~VM_PMALLOC_REWRITABLE;
-	__protect_area(area);
-}
-
-static __always_inline void __unprotect_area(struct vmap_area *area)
-{
-	WARN(!__is_area_protected(area),
-	     "Attempting to unprotect already unprotected area %pK", area);
-	set_memory_rw(area->va_start, area->vm->nr_pages);
-	__untag_area(area);
-}
-
-static __always_inline void __destroy_area(struct vmap_area *area)
-{
-	WARN(!__is_area_protected(area), "Destroying unprotected area.");
-	__unprotect_area(area);
-	vfree((void *)area->va_start);
-}
-
-static __always_inline bool __empty(struct pmalloc_pool *pool)
-{
-	return unlikely(llist_empty(&pool->vm_areas));
-}
-
-static __always_inline bool __protected(struct pmalloc_pool *pool)
-{
-	return __is_area_protected(__current_area(pool));
-}
-
-static __always_inline bool __unwritable(struct pmalloc_pool *pool)
-{
-	return __area_flags(__current_area(pool)) == VM_PMALLOC_PROTECTED;
-}
-
-static inline bool __exhausted(struct pmalloc_pool *pool, size_t size)
-{
-	size_t space_before;
-	size_t space_after;
-
-	space_before = round_down(pool->offset, pool->align);
-	space_after = pool->offset - space_before;
-	return unlikely(space_after < size && space_before < size);
-}
-
-static __always_inline
-bool __space_needed(struct pmalloc_pool *pool, size_t size)
-{
-	return __empty(pool) || __unwritable(pool) || __exhausted(pool, size);
-}
-
+/* The area size backed by pages, without the canary bird. */
 static __always_inline size_t __get_area_pages_size(struct vmap_area *area)
 {
 	return area->vm->nr_pages * PAGE_SIZE;
@@ -229,8 +183,7 @@ bool __area_contains_range(struct vmap_area *area, const void *addr,
 	size_t range_start = (size_t)addr;
 	size_t range_end = range_start + n_bytes;
 
-	return (area->va_start <= range_start) &&
-	       (range_start < range_end) &&
+	return (n_bytes > 0) && (area->va_start <= range_start) &&
 	       (range_end <= area_end);
 }
 
@@ -293,6 +246,7 @@ static inline int __is_pmalloc_object(const void *ptr, const size_t n)
 /*
  * Pmalloc API
  */
+
 void __noreturn usercopy_abort(const char *name, const char *detail,
 			       bool to_user, unsigned long offset,
 			       unsigned long len);
@@ -305,9 +259,9 @@ void __noreturn usercopy_abort(const char *name, const char *detail,
  *
  * If the check is ok, it will fall-through, otherwise it will abort.
  * The function is inlined, to minimize the performance impact of the
- * extra check to perform on a typically hot path.
- * Micro benchmarking with QEMU shows a reduction of the time spent in this
- * fragment by 60%, when inlined.
+ * extra check that can end up on a hot path.
+ * Non-exhaustive micro benchmarking with QEMU x86_64 shows a reduction of
+ * the time spent in this fragment by 60%, when inlined.
  */
 static inline
 void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
@@ -328,10 +282,10 @@ void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
 }
 
 void pmalloc_init_custom_pool(struct pmalloc_pool *pool, size_t refill,
-			      unsigned short align_order, uint8_t mode);
+			      short align_order, uint8_t mode);
 
 struct pmalloc_pool *pmalloc_create_custom_pool(size_t refill,
-						unsigned short align_order,
+						short align_order,
 						uint8_t mode);
 
 /**
@@ -392,7 +346,9 @@ static inline void *pzalloc(struct pmalloc_pool *pool, size_t size)
 static inline
 void *pmalloc_array(struct pmalloc_pool *pool, size_t n, size_t size)
 {
-	if (unlikely(size != 0) && unlikely(n > SIZE_MAX / size))
+	size_t total_size = n * size;
+
+	if (unlikely(!(n && (total_size / n == size))))
 		return NULL;
 	return pmalloc(pool, n * size);
 }
@@ -412,7 +368,9 @@ void *pmalloc_array(struct pmalloc_pool *pool, size_t n, size_t size)
 static inline
 void *pcalloc(struct pmalloc_pool *pool, size_t n, size_t size)
 {
-	if (unlikely(size != 0) && unlikely(n > SIZE_MAX / size))
+	size_t total_size = n * size;
+
+	if (unlikely(!(n && (total_size / n == size))))
 		return NULL;
 	return pzalloc(pool, n * size);
 }
@@ -467,6 +425,14 @@ bool __pmalloc_rare_write(struct pmalloc_pool *pool, const void *dst,
 	return __raw_rare_write(dst, src, RARE_WRITE_VMALLOC_ADDR, n_bytes);
 }
 
+/**
+ * pmalloc_rare_write_char - alters a variable of type char
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
 static __always_inline
 bool pmalloc_rare_write_char(struct pmalloc_pool *pool, const char *dst,
 			     const char val)
@@ -474,6 +440,14 @@ bool pmalloc_rare_write_char(struct pmalloc_pool *pool, const char *dst,
 	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
 }
 
+/**
+ * pmalloc_rare_write_short - alters a short
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
 static __always_inline
 bool pmalloc_rare_write_short(struct pmalloc_pool *pool, const short *dst,
 			      const short val)
@@ -481,6 +455,14 @@ bool pmalloc_rare_write_short(struct pmalloc_pool *pool, const short *dst,
 	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
 }
 
+/**
+ * pmalloc_rare_write_ushort - alters an unsigned short
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
 static __always_inline
 bool pmalloc_rare_write_ushort(struct pmalloc_pool *pool,
 			       const unsigned short *dst,
@@ -489,6 +471,14 @@ bool pmalloc_rare_write_ushort(struct pmalloc_pool *pool,
 	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
 }
 
+/**
+ * pmalloc_rare_write_int - alters an int
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
 static __always_inline
 bool pmalloc_rare_write_int(struct pmalloc_pool *pool, const int *dst,
 			    const int val)
@@ -496,6 +486,14 @@ bool pmalloc_rare_write_int(struct pmalloc_pool *pool, const int *dst,
 	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
 }
 
+/**
+ * pmalloc_rare_write_uint - alters an unsigned int
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
 static __always_inline
 bool pmalloc_rare_write_uint(struct pmalloc_pool *pool,
 			     const unsigned int *dst,
@@ -504,6 +502,14 @@ bool pmalloc_rare_write_uint(struct pmalloc_pool *pool,
 	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
 }
 
+/**
+ * pmalloc_rare_write_long - alters a long
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
 static __always_inline
 bool pmalloc_rare_write_long(struct pmalloc_pool *pool, const long *dst,
 			     const long val)
@@ -511,6 +517,14 @@ bool pmalloc_rare_write_long(struct pmalloc_pool *pool, const long *dst,
 	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
 }
 
+/**
+ * pmalloc_rare_write_ulong - alters an unsigned long
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
 static __always_inline
 bool pmalloc_rare_write_ulong(struct pmalloc_pool *pool,
 			      const unsigned long *dst,
@@ -519,6 +533,14 @@ bool pmalloc_rare_write_ulong(struct pmalloc_pool *pool,
 	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
 }
 
+/**
+ * pmalloc_rare_write_long long - alters a long long
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
 static __always_inline
 bool pmalloc_rare_write_longlong(struct pmalloc_pool *pool,
 				 const long long *dst,
@@ -527,6 +549,14 @@ bool pmalloc_rare_write_longlong(struct pmalloc_pool *pool,
 	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
 }
 
+/**
+ * pmalloc_rare_write_ulonglong - alters an unsigned long long
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
 static __always_inline
 bool pmalloc_rare_write_ulonglong(struct pmalloc_pool *pool,
 				  const unsigned long long *dst,
@@ -535,6 +565,14 @@ bool pmalloc_rare_write_ulonglong(struct pmalloc_pool *pool,
 	return __pmalloc_rare_write(pool, dst, &val, sizeof(val));
 }
 
+/**
+ * pmalloc_rare_write_ptr - alters a pointer
+ * @pool: pointer to the pool containing the memory to be written
+ * @dst: the address of the memory to be written
+ * @val: the value to write
+ *
+ * Return: true upon success, false otherwise
+ */
 static __always_inline
 bool pmalloc_rare_write_ptr(struct pmalloc_pool *pool, const void *dst,
 			    const void *val)
