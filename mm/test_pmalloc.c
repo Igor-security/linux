@@ -21,15 +21,15 @@
 #define SIZE_1 (PAGE_SIZE * 3)
 #define SIZE_2 1000
 
-/* wrapper for is_pmalloc_object() with messages */
+/* wrapper for __is_pmalloc_object() with messages */
 static inline bool validate_alloc(bool expected, void *addr,
 				  unsigned long size)
 {
 	bool test;
 
-	test = (is_pmalloc_object(addr, size) == GOOD_PMALLOC_OBJECT);
+	test = (__is_pmalloc_object(addr, size) == GOOD_PMALLOC_OBJECT);
 	pr_info("must be %s: %s",
-		  expected ? "ok" : "no", test  ? "ok" : "no");
+		  expected ? "ok" : "nok", test  ? "ok" : "nok");
 	return test == expected;
 }
 
@@ -37,15 +37,15 @@ static inline bool validate_alloc(bool expected, void *addr,
 	validate_alloc(true, variable, size)
 
 
-#define is_alloc_no(variable, size)	\
+#define is_alloc_nok(variable, size)	\
 	validate_alloc(false, variable, size)
 
-/* tests the basic life-cycle of a pool */
+/* tests the simplest life-cycle of a pool */
 static bool create_and_destroy_pool(void)
 {
 	static struct pmalloc_pool *pool;
 
-	pool = pmalloc_create_pool(PMALLOC_RO);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RO);
 	if (WARN(!pool, "Cannot allocate memory for pmalloc selftest."))
 		return false;
 	pmalloc_destroy_pool(pool);
@@ -59,7 +59,7 @@ static bool test_alloc(void)
 	static struct pmalloc_pool *pool;
 	static void *p;
 
-	pool = pmalloc_create_pool(PMALLOC_RO);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RO);
 	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
 		return false;
 	p = pmalloc(pool,  SIZE_1 - 1);
@@ -83,17 +83,17 @@ static bool test_is_pmalloc_object(void)
 	if (WARN(!vmalloc_p,
 		 "Unable to allocate memory for pmalloc selftest."))
 		return false;
-	pool = pmalloc_create_pool(PMALLOC_RO);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RO);
 	if (WARN(!pool, "Unable to allocate memory for pmalloc selftest."))
 		return false;
 	pmalloc_p = pmalloc(pool,  SIZE_1 - 1);
 	if (WARN(!pmalloc_p, "Failed to allocate memory from the pool"))
 		goto error;
-	if (WARN_ON(unlikely(!is_alloc_ok(pmalloc_p, 10))) ||
-	    WARN_ON(unlikely(!is_alloc_ok(pmalloc_p, SIZE_1))) ||
-	    WARN_ON(unlikely(!is_alloc_ok(pmalloc_p, PAGE_SIZE))) ||
-	    WARN_ON(unlikely(!is_alloc_no(pmalloc_p, SIZE_1 + 1))) ||
-	    WARN_ON(unlikely(!is_alloc_no(vmalloc_p, 10))))
+	if (WARN_ON(!is_alloc_ok(pmalloc_p, 10)) ||
+	    WARN_ON(!is_alloc_ok(pmalloc_p, SIZE_1)) ||
+	    WARN_ON(!is_alloc_ok(pmalloc_p, PAGE_SIZE)) ||
+	    WARN_ON(!is_alloc_nok(pmalloc_p, SIZE_1 + 1)) ||
+	    WARN_ON(!is_alloc_nok(vmalloc_p, 10)))
 		goto error;
 	retval = true;
 	pr_info("is_pmalloc_object test passed");
@@ -116,7 +116,7 @@ static bool test_pmalloc_rare_write_array(void)
 	unsigned int i;
 	int retval = false;
 
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	if (WARN(!pool, "Failed to create pool"))
 		return false;
 	region = pzalloc(pool, REGION_SIZE);
@@ -170,7 +170,7 @@ static bool test_pmalloc_rare_write_char(void)
 	bool retval;
 
 	retval = false;
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	if (WARN(!pool, "Failed to create pool"))
 		return false;
 	array = pmalloc(pool, sizeof(char) * TEST_ARRAY_SIZE);
@@ -203,7 +203,7 @@ static bool test_pmalloc_rare_write_short(void)
 	bool retval;
 
 	retval = false;
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	if (WARN(!pool, "Failed to create pool"))
 		return false;
 	array = pmalloc(pool, sizeof(short) * TEST_ARRAY_SIZE);
@@ -236,7 +236,7 @@ static bool test_pmalloc_rare_write_ushort(void)
 	bool retval;
 
 	retval = false;
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	if (WARN(!pool, "Failed to create pool"))
 		return false;
 	array = pmalloc(pool, sizeof(unsigned short) * TEST_ARRAY_SIZE);
@@ -271,7 +271,7 @@ static bool test_pmalloc_rare_write_int(void)
 
 	retval = false;
 	pr_info("Testing rare_write_int");
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	if (WARN(!pool, "Failed to create pool"))
 		return false;
 	array = pmalloc(pool, sizeof(int) * TEST_ARRAY_SIZE);
@@ -302,7 +302,7 @@ static bool test_pmalloc_rare_write_uint(void)
 	bool retval;
 
 	retval = false;
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	if (WARN(!pool, "Failed to create pool"))
 		return false;
 	array = pmalloc(pool, sizeof(unsigned int) * TEST_ARRAY_SIZE);
@@ -334,7 +334,7 @@ static bool test_pmalloc_rare_write_long(void)
 	bool retval;
 
 	retval = false;
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	if (WARN(!pool, "Failed to create pool"))
 		return false;
 	array = pmalloc(pool, sizeof(long) * TEST_ARRAY_SIZE);
@@ -366,7 +366,7 @@ static bool test_pmalloc_rare_write_ulong(void)
 	bool retval;
 
 	retval = false;
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	if (WARN(!pool, "Failed to create pool"))
 		return false;
 	array = pmalloc(pool, sizeof(unsigned long) * TEST_ARRAY_SIZE);
@@ -398,7 +398,7 @@ static bool test_pmalloc_rare_write_longlong(void)
 	bool retval;
 
 	retval = false;
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	if (WARN(!pool, "Failed to create pool"))
 		return false;
 	array = pmalloc(pool, sizeof(long long) * TEST_ARRAY_SIZE);
@@ -431,7 +431,7 @@ static bool test_pmalloc_rare_write_ulonglong(void)
 	bool retval;
 
 	retval = false;
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	if (WARN(!pool, "Failed to create pool"))
 		return false;
 	array = pmalloc(pool, sizeof(unsigned long long) * TEST_ARRAY_SIZE);
@@ -464,7 +464,7 @@ static bool test_pmalloc_rare_write_ptr(void)
 	bool retval;
 
 	retval = false;
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	if (WARN(!pool, "Failed to create pool"))
 		return false;
 	array = pmalloc(pool, sizeof(int *) * TEST_ARRAY_SIZE);
@@ -517,7 +517,7 @@ static bool test_illegal_rare_write_ro_pool(void)
 	bool retval = false;
 
 	pr_info("Illegal rare_write to R/O pool - it should WARN");
-	pool = pmalloc_create_pool(PMALLOC_RO);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RO);
 	if (WARN(!pool, "Failed to create pool"))
 		return false;
 	var_ptr = pmalloc(pool, sizeof(int));
@@ -542,7 +542,7 @@ static bool test_illegal_rare_write_static_rare_write_mem(void)
 	int *dummy;
 	bool write_result;
 
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	dummy = pmalloc(pool, sizeof(*dummy));
 	*dummy = 1;
 	pmalloc_protect_pool(pool);
@@ -563,7 +563,7 @@ static bool test_illegal_rare_write_const(void)
 	int *dummy;
 	bool write_result;
 
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	dummy = pmalloc(pool, sizeof(*dummy));
 	*dummy = 1;
 	pmalloc_protect_pool(pool);
@@ -584,7 +584,7 @@ static bool test_illegal_rare_write_ro_after_init(void)
 	int *dummy;
 	bool write_result;
 
-	pool = pmalloc_create_pool(PMALLOC_RW);
+	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
 	dummy = pmalloc(pool, sizeof(*dummy));
 	*dummy = 1;
 	pmalloc_protect_pool(pool);
