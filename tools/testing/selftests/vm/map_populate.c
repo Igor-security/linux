@@ -23,7 +23,7 @@
 
 #define BUG_ON(condition, description)					\
 	do {								\
-		if (condition) {					\
+		if (unlikely(condition)) {				\
 			fprintf(stderr, "[FAIL]\t%s:%d\t%s:%s\n", __func__, \
 				__LINE__, (description), strerror(errno)); \
 			exit(1);					\
