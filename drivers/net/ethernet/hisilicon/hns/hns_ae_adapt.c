@@ -264,7 +264,7 @@ static int hns_ae_set_multicast_one(struct hnae_handle *handle, void *addr)
 	struct hns_mac_cb *mac_cb = hns_get_mac_cb(handle);
 	u8 port_num;
 
-	assert(mac_cb);
+	test_condition(mac_cb);
 
 	if (mac_cb->mac_type != HNAE_PORT_SERVICE)
 		return 0;
@@ -494,7 +494,7 @@ static void hns_ae_get_pauseparam(struct hnae_handle *handle,
 
 static int hns_ae_set_autoneg(struct hnae_handle *handle, u8 enable)
 {
-	assert(handle);
+	test_condition(handle);
 
 	return hns_mac_set_autoneg(hns_get_mac_cb(handle), enable);
 }
@@ -511,7 +511,7 @@ static int hns_ae_get_autoneg(struct hnae_handle *handle)
 {
 	u32     auto_neg;
 
-	assert(handle);
+	test_condition(handle);
 
 	hns_mac_get_autoneg(hns_get_mac_cb(handle), &auto_neg);
 
@@ -618,7 +618,7 @@ static void hns_ae_get_coalesce_range(struct hnae_handle *handle,
 {
 	struct dsaf_device *dsaf_dev;
 
-	assert(handle);
+	test_condition(handle);
 
 	dsaf_dev = hns_ae_get_dsaf_dev(handle->dev);
 
@@ -767,7 +767,7 @@ static void hns_ae_get_strings(struct hnae_handle *handle,
 	u8 *p = data;
 	struct	hnae_vf_cb *vf_cb;
 
-	assert(handle);
+	test_condition(handle);
 
 	vf_cb = hns_ae_get_vf_cb(handle);
 	port = vf_cb->port_index;
@@ -795,7 +795,7 @@ static int hns_ae_get_sset_count(struct hnae_handle *handle, int stringset)
 	struct hns_mac_cb *mac_cb;
 	struct dsaf_device *dsaf_dev = hns_ae_get_dsaf_dev(handle->dev);
 
-	assert(handle);
+	test_condition(handle);
 
 	mac_cb = hns_get_mac_cb(handle);
 
@@ -839,7 +839,7 @@ static void hns_ae_update_led_status(struct hnae_handle *handle)
 {
 	struct hns_mac_cb *mac_cb;
 
-	assert(handle);
+	test_condition(handle);
 	mac_cb = hns_get_mac_cb(handle);
 	if (mac_cb->media_type != HNAE_MEDIA_TYPE_FIBER)
 		return;
@@ -852,7 +852,7 @@ static int hns_ae_cpld_set_led_id(struct hnae_handle *handle,
 {
 	struct hns_mac_cb *mac_cb;
 
-	assert(handle);
+	test_condition(handle);
 
 	mac_cb = hns_get_mac_cb(handle);
 

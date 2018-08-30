@@ -203,11 +203,12 @@ hnae_init_ring(struct hnae_queue *q, struct hnae_ring *ring, int flags)
 	ring->flags = flags;
 	spin_lock_init(&ring->lock);
 	ring->coal_param = q->handle->coal_param;
-	assert(!ring->desc && !ring->desc_cb && !ring->desc_dma_addr);
+	test_condition(!ring->desc && !ring->desc_cb &&
+		       !ring->desc_dma_addr);
 
 	/* not matter for tx or rx ring, the ntc and ntc start from 0 */
-	assert(ring->next_to_use == 0);
-	assert(ring->next_to_clean == 0);
+	test_condition(ring->next_to_use == 0);
+	test_condition(ring->next_to_clean == 0);
 
 	ring->desc_cb = kcalloc(ring->desc_num, sizeof(ring->desc_cb[0]),
 			GFP_KERNEL);

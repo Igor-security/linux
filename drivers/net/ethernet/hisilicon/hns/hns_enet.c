@@ -366,7 +366,7 @@ netdev_tx_t hns_nic_net_xmit_hw(struct net_device *ndev,
 	ndev->stats.tx_packets++;
 
 	wmb(); /* commit all data before submit */
-	assert(skb->queue_mapping < priv->ae_handle->q_num);
+	test_condition(skb->queue_mapping < priv->ae_handle->q_num);
 	hnae_queue_xmit(priv->ae_handle->qs[skb->queue_mapping], buf_num);
 	ring->stats.tx_pkts++;
 	ring->stats.tx_bytes += skb->len;
@@ -937,9 +937,9 @@ static int is_valid_clean_head(struct hnae_ring *ring, int h)
 	if (unlikely(h > ring->desc_num))
 		return 0;
 
-	assert(u > 0 && u < ring->desc_num);
-	assert(c > 0 && c < ring->desc_num);
-	assert(u != c && h != c); /* must be checked before call this func */
+	test_condition(u > 0 && u < ring->desc_num);
+	test_condition(c > 0 && c < ring->desc_num);
+	test_condition(u != c && h != c); /* must be checked before call this func */
 
 	return u > c ? (h > c && h <= u) : (h > c || h <= u);
 }
@@ -1514,8 +1514,6 @@ static netdev_tx_t hns_nic_net_xmit(struct sk_buff *skb,
 				    struct net_device *ndev)
 {
 	struct hns_nic_priv *priv = netdev_priv(ndev);
-
-	assert(skb->queue_mapping < ndev->ae_handle->q_num);
 
 	return hns_nic_net_xmit_hw(ndev, skb,
 				   &tx_ring_data(priv, skb->queue_mapping));
@@ -2249,7 +2247,7 @@ static int hns_nic_notifier_action(struct notifier_block *nb,
 	struct hns_nic_priv *priv =
 		container_of(nb, struct hns_nic_priv, notifier_block);
 
-	assert(action == HNAE_AE_REGISTER);
+	test_condition(action == HNAE_AE_REGISTER);
 
 	if (!hns_nic_try_get_ae(priv->netdev)) {
 		hnae_unregister_notifier(&priv->notifier_block);

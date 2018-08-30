@@ -43,23 +43,9 @@
 #define HNAE_DEFAULT_DEVICE_DESCR "Hisilicon Network Subsystem"
 
 #ifdef DEBUG
-
-#ifndef assert
-#define assert(expr) \
-do { \
-	if (!(expr)) { \
-		pr_err("Assertion failed! %s, %s, %s, line %d\n", \
-			   #expr, __FILE__, __func__, __LINE__); \
-	} \
-} while (0)
-#endif
-
+#define test_condition(expr) WARN_ON_ONCE(!(expr))
 #else
-
-#ifndef assert
-#define assert(expr)
-#endif
-
+#define test_condition(expr)
 #endif
 
 #define AE_VERSION_1 ('6' << 16 | '6' << 8 | '0')
@@ -314,16 +300,16 @@ enum hns_desc_type {
 	DESC_TYPE_PAGE,
 };
 
-#define assert_is_ring_idx(ring, idx) \
-	assert((idx) >= 0 && (idx) < (ring)->desc_num)
+#define is_ring_idx(ring, idx) \
+	test_condition((idx) >= 0 && (idx) < (ring)->desc_num)
 
 /* the distance between [begin, end) in a ring buffer
  * note: there is a unuse slot between the begin and the end
  */
 static inline int ring_dist(struct hnae_ring *ring, int begin, int end)
 {
-	assert_is_ring_idx(ring, begin);
-	assert_is_ring_idx(ring, end);
+	is_ring_idx(ring, begin);
+	is_ring_idx(ring, end);
 
 	return (end - begin + ring->desc_num) % ring->desc_num;
 }
@@ -336,8 +322,8 @@ static inline int ring_space(struct hnae_ring *ring)
 
 static inline int is_ring_empty(struct hnae_ring *ring)
 {
-	assert_is_ring_idx(ring, ring->next_to_use);
-	assert_is_ring_idx(ring, ring->next_to_clean);
+	is_ring_idx(ring, ring->next_to_use);
+	is_ring_idx(ring, ring->next_to_clean);
 
 	return ring->next_to_use == ring->next_to_clean;
 }
@@ -591,10 +577,6 @@ int hnae_reinit_handle(struct hnae_handle *handle);
 
 #define hnae_queue_xmit(q, buf_num) writel_relaxed(buf_num, \
 	(q)->tx_ring.io_base + RCB_REG_TAIL)
-
-#ifndef assert
-#define assert(cond)
-#endif
 
 static inline int hnae_reserve_buffer_map(struct hnae_ring *ring,
 					  struct hnae_desc_cb *cb)
