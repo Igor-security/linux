@@ -31,7 +31,7 @@ static inline void  __BUG_ON(unsigned long condition)
 			     : : "r" (condition), "i" (BRK_BUG));
 }
 
-#define BUG_ON(C) __BUG_ON((unsigned long)(C))
+#define BUG_ON(C) __BUG_ON(unlikely((unsigned long)(C)))
 
 #define HAVE_ARCH_BUG_ON
 
