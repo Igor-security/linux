@@ -24,6 +24,9 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#define pr_success(test_name)	\
+	pr_info(test_name " test passed")
+
 static int scalar __rare_write_after_init = 0xA5A5;
 
 /* The section must occupy a non-zero number of whole pages */
@@ -35,7 +38,7 @@ static bool test_alignment(void)
 	if (WARN((pstart & ~PAGE_MASK) || (pend & ~PAGE_MASK) ||
 		 (pstart >= pend), "Boundaries test failed."))
 		return false;
-	pr_info("Bondaries test passed.");
+	pr_success("Boundaries");
 	return true;
 }
 
@@ -52,7 +55,7 @@ static bool test_simple_write(void)
 		 "Scalar rare write test failed"))
 		return false;
 
-	pr_info("Scalar rare-write test passed.");
+	pr_success("Scalar rare-write test passed");
 	return true;
 }
 
@@ -90,7 +93,7 @@ static bool test_cross_page_write(void)
 			 "Cross-page rare-write test failed"))
 			return false;
 
-	pr_info("Cross-page rare-write test passed");
+	pr_success("Cross-page rare-write");
 	return true;
 }
 
@@ -179,7 +182,7 @@ static bool test_specialized_rare_writes(void)
 		   test_ptr()),
 		 "Specialized rare write test failed"))
 		return false;
-	pr_info("Specialized rare write test passed");
+	pr_success("Specialized rare write");
 	return true;
 }
 
@@ -192,7 +195,7 @@ static bool test_illegal_rare_write_ro_after_init(void)
 		 ro_after_init_data == END_VAL,
 		 "Unexpected successful write to const memory"))
 		return false;
-	pr_info("Illegal rare_write to const memory test passed");
+	pr_success("Illegal rare_write to const memory");
 	return true;
 }
 
@@ -208,7 +211,7 @@ static bool test_illegal_rare_write_const(void)
 		 const_data == END_VAL,
 		 "Unexpected successful write to __ro_after_init memory"))
 		return false;
-	pr_info("Illegal rare_write to __ro_after_init memory test passed");
+	pr_success("Illegal rare_write to __ro_after_init memory");
 	return true;
 }
 
@@ -218,7 +221,7 @@ static bool test_illegal_rare_writes(void)
 		   test_illegal_rare_write_const()),
 		 "illegal static rare writes test failed"))
 		return false;
-	pr_info("illegal static rare writes test passed");
+	pr_success("illegal static rare writes");
 	return true;
 }
 
@@ -231,7 +234,7 @@ static int __init test_static_rare_write_init_module(void)
 		   test_illegal_rare_writes()),
 		 "static rare-write test failed"))
 		return -EFAULT;
-	pr_info("static rare_write test passed");
+	pr_success("static rare_write");
 	return 0;
 }
 
