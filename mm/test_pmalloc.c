@@ -588,7 +588,7 @@ static bool test_illegal_rare_writes(void)
 		   test_illegal_rare_write_static_rare_write_mem() &&
 		   test_illegal_rare_write_const() &&
 		   test_illegal_rare_write_ro_pool()),
-		 "illegal rare writes tests failed"))
+		 "Illegal rare writes tests failed"))
 		return false;
 	pr_success("illegal rare writes");
 	return true;
@@ -596,8 +596,6 @@ static bool test_illegal_rare_writes(void)
 
 /* ----------------------- tests self protection ----------------------- */
 
-#define FIRST_VALUE 0xA5
-#define SECOND_VALUE 0x5A
 static bool test_auto_ro(void)
 {
 	struct pmalloc_pool *pool;
@@ -605,18 +603,15 @@ static bool test_auto_ro(void)
 	int *second_chunk;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RO);
+	create_pool_or_return(pool, PMALLOC_POOL_AUTO_RO);
 	first_chunk = (int *)pmalloc(pool, PMALLOC_DEFAULT_REFILL_SIZE);
 	if (WARN(!first_chunk, MSG_NO_PMEM))
 		goto error;
-	*first_chunk = FIRST_VALUE;
 	second_chunk = (int *)pmalloc(pool, PMALLOC_DEFAULT_REFILL_SIZE);
-	if (WARN(!second_chunk, "failed to allocate memory from pool"))
+	if (WARN(!second_chunk, MSG_NO_PMEM))
 		goto error;
-	pr_expect_warn("Illegal write to protected memory");
-	*first_chunk = SECOND_VALUE;
-	if (WARN(*first_chunk == SECOND_VALUE,
-		 "Unexpected successful write to AUTO_RO memory"))
+	if (WARN(!pmalloc_is_address_protected(first_chunk),
+		 "Failed to automatically write protect exhausted vmarea"))
 		goto error;
 	pr_success("AUTO_RO");
 	retval = true;
