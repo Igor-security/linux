@@ -276,6 +276,35 @@ void pmalloc_make_pool_ro(struct pmalloc_pool *pool)
 EXPORT_SYMBOL(pmalloc_make_pool_ro);
 
 /**
+ * pmalloc_is_address_protected() - checks if the corresponding page is RO
+ * @p: the address to test
+ *
+ * Return: true is the page containing the address is RO, false otherwise
+ *
+ * In cases of concurrent threads, it might be necessary to introduce
+ * locking with the thread responsible of protecting the data.
+ */
+bool pmalloc_is_address_protected(void *p)
+{
+	struct page *page;
+	struct vm_struct *area;
+
+	if (unlikely(!is_vmalloc_addr(p)))
+		return false;
+	page = vmalloc_to_page(p);
+	if (unlikely(!page))
+		return false;
+	wmb();
+	area = page->area;
+	if (unlikely((!area) ||
+		     ((area->flags & VM_PMALLOC_PROTECTED_MASK) !=
+		      VM_PMALLOC_PROTECTED_MASK)))
+		return false;
+	return true;
+}
+EXPORT_SYMBOL(pmalloc_is_address_protected);
+
+/**
  * pmalloc_destroy_pool() - destroys a pool and all the associated memory
  * @pool: the pool to destroy
  *

@@ -626,6 +626,8 @@ void pmalloc_protect_pool(struct pmalloc_pool *pool);
 
 void pmalloc_make_pool_ro(struct pmalloc_pool *pool);
 
+bool pmalloc_is_address_protected(void *p);
+
 void pmalloc_destroy_pool(struct pmalloc_pool *pool);
 #endif
 #endif
