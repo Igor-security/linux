@@ -68,12 +68,23 @@ void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
 #include <linux/llist.h>
 
 #define PMALLOC_REFILL_DEFAULT (0)
+#define PMALLOC_DEFAULT_REFILL_SIZE PAGE_SIZE
 #define PMALLOC_ALIGN_ORDER_DEFAULT ilog2(ARCH_KMALLOC_MINALIGN)
 
 
 /*
  * A pool can be set either for rare-write or read-only mode.
- * In both cases, it can be managed either manually or automatically.
+ * In both cases, the protection of its content can be managed either
+ * manually or automatically.
+ *
+ * AUTO_RO/AUTO_RW mean that every vmap area in a pool is automatically
+ * protected, whenever it becomes full or anyway unsuitable for the next
+ * allocation at hand, because there is not enough free space left.
+ * To be used safely, data can be directly written-to exclusively to the
+ * latest allocation. Allocating a new chunk forfaits the possibility of
+ * writing safely to any previous allocation.
+ * If the pool is in rare-write mode, it's still possible to alter its
+ * data, as long as it's done through functions of the rare-write family.
  */
 #define PMALLOC_POOL_RO			0x00
 #define PMALLOC_POOL_RW			0x01

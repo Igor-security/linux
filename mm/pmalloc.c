@@ -26,7 +26,6 @@ static LIST_HEAD(pools_list);
 static DEFINE_MUTEX(pools_mutex);
 
 #define MAX_ALIGN_ORDER (ilog2(sizeof(void *)))
-#define DEFAULT_REFILL_SIZE PAGE_SIZE
 
 
 /*
@@ -127,7 +126,8 @@ void pmalloc_init_custom_pool(struct pmalloc_pool *pool, size_t refill,
 		pool->align = ARCH_KMALLOC_MINALIGN;
 	else
 		pool->align = 1UL << align_order;
-	pool->refill = refill ? PAGE_ALIGN(refill) : DEFAULT_REFILL_SIZE;
+	pool->refill = refill ? PAGE_ALIGN(refill) :
+				PMALLOC_DEFAULT_REFILL_SIZE;
 	pool->mode = mode & PMALLOC_POOL_MASK;
 	pool->offset = 0;
 	mutex_lock(&pools_mutex);
