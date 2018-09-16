@@ -40,7 +40,7 @@ static __always_inline void __protect_area(struct vmap_area *area)
 
 static __always_inline void __make_area_ro(struct vmap_area *area)
 {
-	area->vm->flags &= ~VM_PMALLOC_REWRITABLE;
+	area->vm->flags &= ~VM_PMALLOC_WR;
 	__protect_area(area);
 }
 
@@ -76,8 +76,8 @@ static __always_inline bool __unwritable(struct pmalloc_pool *pool)
 	unsigned long area_flags = __area_flags(__current_area(pool));
 
 	return  (area_flags & VM_PMALLOC_PROTECTED) &&
-		!((area_flags & VM_PMALLOC_REWRITABLE) &&
-		  (pool->mode & PMALLOC_POOL_START_PROTECTED));
+		!((area_flags & VM_PMALLOC_WR) &&
+		  (pool->mode & PMALLOC_START));
 }
 
 static inline bool __exhausted(struct pmalloc_pool *pool, size_t size)
@@ -121,7 +121,10 @@ void pmalloc_init_custom_pool(struct pmalloc_pool *pool, size_t refill,
 		pool->align = 1UL << align_order;
 	pool->refill = refill ? PAGE_ALIGN(refill) :
 				PMALLOC_DEFAULT_REFILL_SIZE;
-	pool->mode = mode & PMALLOC_POOL_MASK;
+	mode &= PMALLOC_MASK;
+	if (mode & PMALLOC_START)
+		mode |= PMALLOC_WR;
+	pool->mode = mode & PMALLOC_MASK;
 	pool->offset = 0;
 	mutex_lock(&pools_mutex);
 	list_add(&pool->pool_node, &pools_list);
@@ -173,12 +176,12 @@ static int grow(struct pmalloc_pool *pool, size_t min_size)
 
 	new_area = find_vmap_area((unsigned long)addr);
 	tag_mask = VM_PMALLOC;
-	if (pool->mode & PMALLOC_POOL_RW)
-		tag_mask |= VM_PMALLOC_REWRITABLE;
+	if (pool->mode & PMALLOC_WR)
+		tag_mask |= VM_PMALLOC_WR;
 	__tag_area(new_area, tag_mask);
-	if (pool->mode & PMALLOC_POOL_START_PROTECTED) {
+	if (pool->mode & PMALLOC_START) {
 		__protect_area(new_area);
-	} else if (pool->mode & PMALLOC_POOL_AUTO_PROTECT &&
+	} else if (pool->mode & PMALLOC_AUTO &&
 		   !__empty(pool)) {
 		struct vmap_area *old_area;
 
@@ -261,7 +264,7 @@ void pmalloc_make_pool_ro(struct pmalloc_pool *pool)
 	struct vmap_area *area;
 
 	mutex_lock(&pool->mutex);
-	pool->mode &= ~(PMALLOC_POOL_RW | PMALLOC_POOL_START_PROTECTED);
+	pool->mode &= ~(PMALLOC_WR | PMALLOC_START);
 	llist_for_each_entry(area, pool->vm_areas.first, area_list)
 		__protect_area(area);
 	mutex_unlock(&pool->mutex);
