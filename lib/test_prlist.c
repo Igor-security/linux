@@ -21,7 +21,7 @@
 
 static struct pmalloc_pool *pool;
 
-static struct prlist_head test_prlist_head __rare_write_after_init =
+static struct prlist_head test_prlist_head __wr_after_init =
 	PRLIST_HEAD_INIT(test_prlist_head.list);
 
 /* ---------------------- prlist test functions ---------------------- */
@@ -31,8 +31,8 @@ static bool test_init_prlist_head(void)
 		 test_prlist_head.next != &test_prlist_head,
 		 "static initialization of static prlist_head failed"))
 		return false;
-	rare_write_ptr(&test_prlist_head.next, NULL);
-	rare_write_ptr(&test_prlist_head.prev, NULL);
+	wr_ptr(&test_prlist_head.next, NULL);
+	wr_ptr(&test_prlist_head.prev, NULL);
 	if (WARN(test_prlist_head.prev || test_prlist_head.next,
 		 "resetting of static prlist_head failed"))
 		return false;
@@ -69,16 +69,16 @@ static bool test_build_prlist(void)
 		data = (struct prlist_data *)pmalloc(pool, sizeof(*data));
 		if (WARN(!data, "Failed to allocate prlist node"))
 			goto out;
-		pmalloc_rare_write_int(pool, &data->d_int, i);
-		pmalloc_rare_write_ulonglong(pool, &data->d_ulonglong, i);
+		pmalloc_wr_int(pool, &data->d_int, i);
+		pmalloc_wr_ulonglong(pool, &data->d_ulonglong, i);
 		prlist_add_tail(pool, &data->node, &test_prlist_head);
 	}
 	for (i = 1; i < LIST_NODES; i++) {
 		data = (struct prlist_data *)pmalloc(pool, sizeof(*data));
 		if (WARN(!data, "Failed to allocate prlist node"))
 			goto out;
-		pmalloc_rare_write_int(pool, &data->d_int, i);
-		pmalloc_rare_write_ulonglong(pool, &data->d_ulonglong, i);
+		pmalloc_wr_int(pool, &data->d_int, i);
+		pmalloc_wr_ulonglong(pool, &data->d_ulonglong, i);
 		prlist_add(pool, &data->node, &test_prlist_head);
 	}
 	i = LIST_NODES;
@@ -123,7 +123,7 @@ static bool test_prlist(void)
 }
 
 /* ---------------------- prhlist test functions ---------------------- */
-static struct prhlist_head test_prhlist_head __rare_write_after_init =
+static struct prhlist_head test_prhlist_head __wr_after_init =
 	PRHLIST_HEAD_INIT;
 
 static bool test_init_prhlist_head(void)
@@ -131,7 +131,7 @@ static bool test_init_prhlist_head(void)
 	if (WARN(test_prhlist_head.first,
 		 "static initialization of static prhlist_head failed"))
 		return false;
-	rare_write_ptr(&test_prhlist_head.first, (void *)-1);
+	wr_ptr(&test_prhlist_head.first, (void *)-1);
 	if (WARN(!test_prhlist_head.first,
 		 "resetting of static prhlist_head failed"))
 		return false;
@@ -163,8 +163,8 @@ static bool test_build_prhlist(void)
 		data = (struct prhlist_data *)pmalloc(pool, sizeof(*data));
 		if (WARN(!data, "Failed to allocate prhlist node"))
 			goto out;
-		pmalloc_rare_write_int(pool, &data->d_int, i);
-		pmalloc_rare_write_ulonglong(pool, &data->d_ulonglong, i);
+		pmalloc_wr_int(pool, &data->d_int, i);
+		pmalloc_wr_ulonglong(pool, &data->d_ulonglong, i);
 		prhlist_add_head(pool, &data->node, &test_prhlist_head);
 	}
 	anchor = test_prhlist_head.first;
@@ -172,8 +172,8 @@ static bool test_build_prhlist(void)
 		data = (struct prhlist_data *)pmalloc(pool, sizeof(*data));
 		if (WARN(!data, "Failed to allocate prhlist node"))
 			goto out;
-		pmalloc_rare_write_int(pool, &data->d_int, i);
-		pmalloc_rare_write_ulonglong(pool, &data->d_ulonglong, i);
+		pmalloc_wr_int(pool, &data->d_int, i);
+		pmalloc_wr_ulonglong(pool, &data->d_ulonglong, i);
 		prhlist_add_before(pool, &data->node, anchor);
 	}
 	hlist_for_each_entry(data, &test_prhlist_head, node)
@@ -183,8 +183,8 @@ static bool test_build_prhlist(void)
 		data = (struct prhlist_data *)pmalloc(pool, sizeof(*data));
 		if (WARN(!data, "Failed to allocate prhlist node"))
 			goto out;
-		pmalloc_rare_write_int(pool, &data->d_int, i);
-		pmalloc_rare_write_ulonglong(pool, &data->d_ulonglong, i);
+		pmalloc_wr_int(pool, &data->d_int, i);
+		pmalloc_wr_ulonglong(pool, &data->d_ulonglong, i);
 		prhlist_add_behind(pool, &data->node, anchor);
 	}
 	i = 0;
