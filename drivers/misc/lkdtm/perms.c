@@ -133,7 +133,7 @@ void lkdtm_WRITE_RO_PMALLOC(void)
 	struct pmalloc_pool *pool;
 	int *i;
 
-	pool = pmalloc_create_pool(PMALLOC_POOL_RO);
+	pool = pmalloc_create_pool(PMALLOC_RO);
 	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
 		return;
 
@@ -155,7 +155,7 @@ void lkdtm_WRITE_AUTO_RO_PMALLOC(void)
 	struct pmalloc_pool *pool;
 	int *i;
 
-	pool = pmalloc_create_pool(PMALLOC_POOL_AUTO_RO);
+	pool = pmalloc_create_pool(PMALLOC_AUTO_RO);
 	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
 		return;
 
@@ -171,12 +171,12 @@ void lkdtm_WRITE_AUTO_RO_PMALLOC(void)
 	*i = 0;
 }
 
-void lkdtm_WRITE_RARE_WRITE_PMALLOC(void)
+void lkdtm_WRITE_WR_PMALLOC(void)
 {
 	struct pmalloc_pool *pool;
 	int *i;
 
-	pool = pmalloc_create_pool(PMALLOC_POOL_RW);
+	pool = pmalloc_create_pool(PMALLOC_WR);
 	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
 		return;
 
@@ -193,12 +193,12 @@ void lkdtm_WRITE_RARE_WRITE_PMALLOC(void)
 	*i = 0;
 }
 
-void lkdtm_WRITE_AUTO_RARE_WRITE_PMALLOC(void)
+void lkdtm_WRITE_AUTO_WR_PMALLOC(void)
 {
 	struct pmalloc_pool *pool;
 	int *i;
 
-	pool = pmalloc_create_pool(PMALLOC_POOL_AUTO_RW);
+	pool = pmalloc_create_pool(PMALLOC_AUTO_WR);
 	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
 		return;
 
@@ -214,12 +214,12 @@ void lkdtm_WRITE_AUTO_RARE_WRITE_PMALLOC(void)
 	*i = 0;
 }
 
-void lkdtm_WRITE_START_RARE_WRITE_PMALLOC(void)
+void lkdtm_WRITE_START_WR_PMALLOC(void)
 {
 	struct pmalloc_pool *pool;
 	int *i;
 
-	pool = pmalloc_create_pool(PMALLOC_POOL_START_RW);
+	pool = pmalloc_create_pool(PMALLOC_START_WR);
 	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
 		return;
 
