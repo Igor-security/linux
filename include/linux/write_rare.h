@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * write_rare.h: Header for rare writes to statically allocated variables
+ * write_rare.h: Header for write rares to statically allocated variables
  *
  * (C) Copyright 2018 Huawei Technologies Co. Ltd.
  * Author: Igor Stoppa <igor.stoppa@huawei.com>
@@ -49,15 +49,79 @@ bool wr_check_boundaries(const void *dst, size_t size)
 }
 
 /*
- * This is the core of the rare write functionality.
+ * This is the core of the write rare memset functionality.
  * It doesn't perform any check on the validity of the target.
  * The wrapper using it is supposed to apply sensible verification
  * criteria, depending on the specific use-case and, to minimize
  * run-time checks, also specify the type of memory being modified.
  */
 static __always_inline
-bool __raw_wr(const void *dst, const void *const src, enum wr_type type,
-	      size_t n_bytes)
+bool __raw_wr_memset(const void *dst, const int c, enum wr_type type,
+		     size_t n_bytes)
+{
+	size_t size;
+	unsigned long flags;
+	const void *d = dst;
+
+	while (n_bytes) {
+		struct page *page;
+		void *base;
+		unsigned long offset;
+		size_t offset_complement;
+
+		local_irq_save(flags);
+		if (type == WR_VIRT_ADDR)
+			page = virt_to_page(d);
+		else if (type == WR_VMALLOC_ADDR)
+			page = vmalloc_to_page(d);
+		else
+			goto err;
+		offset = (unsigned long)d & ~PAGE_MASK;
+		offset_complement = ((size_t)PAGE_SIZE) - offset;
+		size = min(((int)n_bytes), ((int)offset_complement));
+		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
+		if (WARN(!base, "failed to remap write rare page"))
+			goto err;
+		memset(base + offset, c, size);
+		vunmap(base);
+		d += size;
+		n_bytes -= size;
+		local_irq_restore(flags);
+	}
+	return true;
+err:
+	local_irq_restore(flags);
+	return false;
+}
+
+/**
+ * wr_memset - sets n bytes of the destination to a specified value,
+ *             within the boundaries of the __wr_after_init segment
+ * @dst: beginning of the memory to write to
+ * @c: byte to replicate
+ * @size: amount of bytes to copy
+ *
+ * Returns true on success, false otherwise.
+ */
+static __always_inline
+bool wr_memset(const void *dst, const int c, size_t n_bytes)
+{
+	if (WARN(!wr_check_boundaries(dst, n_bytes),
+		 "Not a valid write rare destination."))
+		return false;
+	return __raw_wr_memset(dst, c, WR_VIRT_ADDR, n_bytes);
+}
+
+/*
+ * This is the core of the write rare copy functionality.
+ * It doesn't perform any check on the validity of the target.
+ * The wrapper using it is supposed to apply sensible verification
+ * criteria, depending on the specific use-case and, to minimize
+ * run-time checks, also specify the type of memory being modified.
+ */
+static __always_inline
+bool __raw_wr_copy(const void *dst, const void *const src,
+		   enum wr_type type, size_t n_bytes)
 {
 	size_t size;
 	unsigned long flags;
@@ -111,7 +175,7 @@ bool wr_array(const void *dst, const void *src, size_t n_bytes)
 	if (WARN(!wr_check_boundaries(dst, n_bytes),
 		 "Not a valid write rare destination."))
 		return false;
-	return __raw_wr(dst, src, WR_VIRT_ADDR, n_bytes);
+	return __raw_wr_copy(dst, src, WR_VIRT_ADDR, n_bytes);
 }
 
 #define __wr_simple(dst_ptr, src_ptr)					\
@@ -142,7 +206,7 @@ bool wr_array(const void *dst, const void *src, size_t n_bytes)
 						__UNIQUE_ID(__dst_ptr),	\
 						__UNIQUE_ID(__src_ptr)))
 
-/* Specialized versions of rare write */
+/* Specialized versions of write rare */
 
 /**
  * wr_ptr - alters a pointer in write rare memory
