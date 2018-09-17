@@ -39,7 +39,7 @@ struct pmalloc_pool *prlist_create_custom_pool(size_t refill,
 					       unsigned short align_order)
 {
 	return pmalloc_create_custom_pool(refill, align_order,
-					  PMALLOC_POOL_START_RW);
+					  PMALLOC_START_WR);
 }
 
 static __always_inline
@@ -53,20 +53,20 @@ static __always_inline
 void prlist_set_prev(struct pmalloc_pool *pool, struct prlist_head *head,
 		     const struct prlist_head *prev)
 {
-	if (unlikely(rare_write_check_boundaries(head, sizeof(head))))
-		rare_write_ptr(&head->prev, prev);
+	if (unlikely(wr_check_boundaries(head, sizeof(head))))
+		wr_ptr(&head->prev, prev);
 	else
-		pmalloc_rare_write_ptr(pool, &head->prev, prev);
+		pmalloc_wr_ptr(pool, &head->prev, prev);
 }
 
 static __always_inline
 void prlist_set_next(struct pmalloc_pool *pool, struct prlist_head *head,
 		     const struct prlist_head *next)
 {
-	if (unlikely(rare_write_check_boundaries(head, sizeof(head))))
-		rare_write_ptr(&head->next, next);
+	if (unlikely(wr_check_boundaries(head, sizeof(head))))
+		wr_ptr(&head->next, next);
 	else
-		pmalloc_rare_write_ptr(pool, &head->next, next);
+		pmalloc_wr_ptr(pool, &head->next, next);
 }
 
 static __always_inline
@@ -107,8 +107,8 @@ void prlist_del_entry(struct pmalloc_pool *pool, struct prlist_head *entry)
 {
 	prlist_set_prev(pool, entry->next, entry->prev);
 	prlist_set_next(pool, entry->prev, entry->next);
-	pmalloc_rare_write_ptr(pool, &entry->next, LIST_POISON1);
-	pmalloc_rare_write_ptr(pool, &entry->prev, LIST_POISON2);
+	pmalloc_wr_ptr(pool, &entry->next, LIST_POISON1);
+	pmalloc_wr_ptr(pool, &entry->prev, LIST_POISON2);
 }
 
 static __always_inline void dump_prlist_head(struct prlist_head *head)
@@ -138,14 +138,14 @@ struct prhlist_node {
 #define PRHLIST_HEAD_INIT	{{.head = HLIST_HEAD_INIT}}
 
 #define is_static(object) \
-	unlikely(rare_write_check_boundaries(object, sizeof(*object)))
+	unlikely(wr_check_boundaries(object, sizeof(*object)))
 
 static __always_inline
 struct pmalloc_pool *prhlist_create_custom_pool(size_t refill,
 						unsigned short align_order)
 {
 	return pmalloc_create_custom_pool(refill, align_order,
-					  PMALLOC_POOL_AUTO_RW);
+					  PMALLOC_AUTO_WR);
 }
 
 static __always_inline
@@ -160,9 +160,9 @@ void prhlist_set_first(struct pmalloc_pool *pool, struct prhlist_head *head,
 		       struct prhlist_node *first)
 {
 	if (is_static(head))
-		rare_write_ptr(&head->first, first);
+		wr_ptr(&head->first, first);
 	else
-		pmalloc_rare_write_ptr(pool, &head->first, first);
+		pmalloc_wr_ptr(pool, &head->first, first);
 }
 
 static __always_inline
@@ -170,9 +170,9 @@ void prhlist_set_next(struct pmalloc_pool *pool, struct prhlist_node *node,
 		      struct prhlist_node *next)
 {
 	if (is_static(node))
-		rare_write_ptr(&node->next, next);
+		wr_ptr(&node->next, next);
 	else
-		pmalloc_rare_write_ptr(pool, &node->next, next);
+		pmalloc_wr_ptr(pool, &node->next, next);
 }
 
 static __always_inline
@@ -180,9 +180,9 @@ void prhlist_set_pprev(struct pmalloc_pool *pool, struct prhlist_node *node,
 		       struct prhlist_node **pprev)
 {
 	if (is_static(node))
-		rare_write_ptr(&node->pprev, pprev);
+		wr_ptr(&node->pprev, pprev);
 	else
-		pmalloc_rare_write_ptr(pool, &node->pprev, pprev);
+		pmalloc_wr_ptr(pool, &node->pprev, pprev);
 }
 
 static __always_inline
@@ -190,9 +190,9 @@ void prhlist_set_prev(struct pmalloc_pool *pool, struct prhlist_node *node,
 		       struct prhlist_node *prev)
 {
 	if (is_static(node->pprev))
-		rare_write_ptr(node->pprev, prev);
+		wr_ptr(node->pprev, prev);
 	else
-		pmalloc_rare_write_ptr(pool, node->pprev, prev);
+		pmalloc_wr_ptr(pool, node->pprev, prev);
 }
 
 static __always_inline
@@ -210,8 +210,8 @@ void INIT_STATIC_PRHLIST_HEAD(struct prhlist_head *head)
 static __always_inline
 void INIT_PRHLIST_NODE(struct pmalloc_pool *pool, struct prhlist_node *node)
 {
-	pmalloc_rare_write_ptr(pool, &node->next, NULL);
-	pmalloc_rare_write_ptr(pool, &node->pprev, NULL);
+	pmalloc_wr_ptr(pool, &node->next, NULL);
+	pmalloc_wr_ptr(pool, &node->pprev, NULL);
 }
 
 static __always_inline
@@ -276,8 +276,8 @@ static __always_inline
 void prhlist_del(struct pmalloc_pool *pool, struct prhlist_node *node)
 {
 	__prhlist_del(pool, node);
-	pmalloc_rare_write_ptr(pool, &node->next, LIST_POISON1);
-	pmalloc_rare_write_ptr(pool, &node->pprev, LIST_POISON2);
+	pmalloc_wr_ptr(pool, &node->next, LIST_POISON1);
+	pmalloc_wr_ptr(pool, &node->pprev, LIST_POISON2);
 }
 
 static __always_inline
