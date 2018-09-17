@@ -37,31 +37,30 @@ static const char MSG_NO_PMEM[] = "Cannot allocate memory from the pool.";
 #define pr_expect_warn(test_name)	\
 	pr_info(test_name " - it should WARN")
 
-/* wrapper for __is_pmalloc_object() with messages */
-static inline bool validate_alloc(bool expected, void *addr,
-				  unsigned long size)
+/* wrapper for __is_pmalloc_addr() with messages */
+static inline bool validate_alloc(bool expected, void *addr)
 {
 	bool test;
 
-	test = (__is_pmalloc_object(addr, size) == GOOD_PMALLOC_OBJECT);
+	test = __is_pmalloc_addr(addr);
 	pr_info("must be %s: %s",
 		  expected ? "ok" : "nok", test  ? "ok" : "nok");
 	return likely(test == expected);
 }
 
-#define is_alloc_ok(variable, size)	\
-	validate_alloc(true, variable, size)
+#define is_alloc_ok(variable)	\
+	validate_alloc(true, variable)
 
 
-#define is_alloc_nok(variable, size)	\
-	validate_alloc(false, variable, size)
+#define is_alloc_nok(variable)	\
+	validate_alloc(false, variable)
 
 /* --------------- tests the basic life-cycle of a pool --------------- */
 static bool create_and_destroy_pool(void)
 {
 	static struct pmalloc_pool *pool;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RO);
+	create_pool_or_return(pool, PMALLOC_RO);
 	pmalloc_destroy_pool(pool);
 	pr_success("pool creation and destruction");
 	return true;
@@ -73,7 +72,7 @@ static bool test_alloc(void)
 	static struct pmalloc_pool *pool;
 	static void *p;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RO);
+	create_pool_or_return(pool, PMALLOC_RO);
 	p = pmalloc(pool,  SIZE_1 - 1);
 	pmalloc_destroy_pool(pool);
 	if (WARN(!p, MSG_NO_PMEM))
@@ -90,18 +89,15 @@ static bool test_is_pmalloc_object(void)
 	void *vmalloc_p;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RO);
-	vmalloc_p = vmalloc(SIZE_1);
+	create_pool_or_return(pool, PMALLOC_RO);
+	vmalloc_p = vmalloc(1);
 	if (WARN(!vmalloc_p, "Cannot allocate vmalloc memory."))
 		goto error_vmalloc;
-	pmalloc_p = pmalloc(pool,  SIZE_1 - 1);
+	pmalloc_p = pmalloc(pool, 1);
 	if (WARN(!pmalloc_p, MSG_NO_PMEM))
 		goto error;
-	if (WARN_ON(!(is_alloc_ok(pmalloc_p, 10) &&
-		      is_alloc_ok(pmalloc_p, SIZE_1) &&
-		      is_alloc_ok(pmalloc_p, PAGE_SIZE) &&
-		      is_alloc_nok(pmalloc_p, SIZE_1 + 1) &&
-		      is_alloc_nok(vmalloc_p, 10))))
+	if (WARN_ON(!(is_alloc_ok(pmalloc_p) &&
+		      is_alloc_nok(vmalloc_p))))
 		goto error;
 	retval = true;
 	pr_success("is_pmalloc_object");
@@ -116,7 +112,7 @@ error_vmalloc:
 #define INSERT_SIZE (PAGE_SIZE * 2)
 #define REGION_SIZE (PAGE_SIZE * 5)
 /* Verify rare writes across multiple pages, unaligned to PAGE_SIZE. */
-static bool test_pmalloc_rare_write_array(void)
+static bool test_pmalloc_wr_array(void)
 {
 	struct pmalloc_pool *pool;
 	char *region;
@@ -124,7 +120,7 @@ static bool test_pmalloc_rare_write_array(void)
 	unsigned int i;
 	int retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	region = pzalloc(pool, REGION_SIZE);
 	if (WARN(!region, MSG_NO_PMEM))
 		goto destroy_pool;
@@ -133,9 +129,9 @@ static bool test_pmalloc_rare_write_array(void)
 		goto destroy_pool;
 	memset(mod, 0xA5, INSERT_SIZE);
 	pmalloc_protect_pool(pool);
-	retval = !pmalloc_rare_write_array(pool, region + INSERT_OFFSET,
+	retval = !pmalloc_wr_array(pool, region + INSERT_OFFSET,
 					   mod, INSERT_SIZE);
-	if (WARN(retval, "rare_write_array failed"))
+	if (WARN(retval, "wr_array failed"))
 		goto free_mod;
 
 	for (i = 0; i < REGION_SIZE; i++)
@@ -150,7 +146,7 @@ static bool test_pmalloc_rare_write_array(void)
 				goto free_mod;
 		}
 	retval = true;
-	pr_success("pmalloc_rare_write");
+	pr_success("pmalloc_wr");
 free_mod:
 	vfree(mod);
 destroy_pool:
@@ -162,21 +158,21 @@ destroy_pool:
 #define TEST_ARRAY_SIZE 5
 #define TEST_ARRAY_TARGET (TEST_ARRAY_SIZE / 2)
 
-static bool test_pmalloc_rare_write_char(void)
+static bool test_pmalloc_wr_char(void)
 {
 	struct pmalloc_pool *pool;
 	char *array;
 	unsigned int i;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	array = pmalloc(pool, sizeof(char) * TEST_ARRAY_SIZE);
 	if (WARN(!array, MSG_NO_PMEM))
 		goto destroy_pool;
 	for (i = 0; i < TEST_ARRAY_SIZE; i++)
 		array[i] = (char)0xA5;
 	pmalloc_protect_pool(pool);
-	if (WARN(!pmalloc_rare_write_char(pool, array + TEST_ARRAY_TARGET,
+	if (WARN(!pmalloc_wr_char(pool, array + TEST_ARRAY_TARGET,
 					  (char)0x5A),
 		 "Failed to alter char variable"))
 		goto destroy_pool;
@@ -186,27 +182,27 @@ static bool test_pmalloc_rare_write_char(void)
 			 "Unexpected value in test array."))
 			goto destroy_pool;
 	retval = true;
-	pr_success("rare_write_char");
+	pr_success("wr_char");
 destroy_pool:
 	pmalloc_destroy_pool(pool);
 	return retval;
 }
 
-static bool test_pmalloc_rare_write_short(void)
+static bool test_pmalloc_wr_short(void)
 {
 	struct pmalloc_pool *pool;
 	short *array;
 	unsigned int i;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	array = pmalloc(pool, sizeof(short) * TEST_ARRAY_SIZE);
 	if (WARN(!array, MSG_NO_PMEM))
 		goto destroy_pool;
 	for (i = 0; i < TEST_ARRAY_SIZE; i++)
 		array[i] = (short)0xA5;
 	pmalloc_protect_pool(pool);
-	if (WARN(!pmalloc_rare_write_short(pool, array + TEST_ARRAY_TARGET,
+	if (WARN(!pmalloc_wr_short(pool, array + TEST_ARRAY_TARGET,
 					   (short)0x5A),
 		 "Failed to alter short variable"))
 		goto destroy_pool;
@@ -216,27 +212,27 @@ static bool test_pmalloc_rare_write_short(void)
 			 "Unexpected value in test array."))
 			goto destroy_pool;
 	retval = true;
-	pr_success("rare_write_short");
+	pr_success("wr_short");
 destroy_pool:
 	pmalloc_destroy_pool(pool);
 	return retval;
 }
 
-static bool test_pmalloc_rare_write_ushort(void)
+static bool test_pmalloc_wr_ushort(void)
 {
 	struct pmalloc_pool *pool;
 	unsigned short *array;
 	unsigned int i;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	array = pmalloc(pool, sizeof(unsigned short) * TEST_ARRAY_SIZE);
 	if (WARN(!array, MSG_NO_PMEM))
 		goto destroy_pool;
 	for (i = 0; i < TEST_ARRAY_SIZE; i++)
 		array[i] = (unsigned short)0xA5;
 	pmalloc_protect_pool(pool);
-	if (WARN(!pmalloc_rare_write_ushort(pool, array + TEST_ARRAY_TARGET,
+	if (WARN(!pmalloc_wr_ushort(pool, array + TEST_ARRAY_TARGET,
 					    (unsigned short)0x5A),
 		 "Failed to alter unsigned short variable"))
 		goto destroy_pool;
@@ -247,27 +243,27 @@ static bool test_pmalloc_rare_write_ushort(void)
 			 "Unexpected value in test array."))
 			goto destroy_pool;
 	retval = true;
-	pr_success("rare_write_ushort");
+	pr_success("wr_ushort");
 destroy_pool:
 	pmalloc_destroy_pool(pool);
 	return retval;
 }
 
-static bool test_pmalloc_rare_write_int(void)
+static bool test_pmalloc_wr_int(void)
 {
 	struct pmalloc_pool *pool;
 	int *array;
 	unsigned int i;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	array = pmalloc(pool, sizeof(int) * TEST_ARRAY_SIZE);
 	if (WARN(!array, MSG_NO_PMEM))
 		goto destroy_pool;
 	for (i = 0; i < TEST_ARRAY_SIZE; i++)
 		array[i] = 0xA5;
 	pmalloc_protect_pool(pool);
-	if (WARN(!pmalloc_rare_write_int(pool, array + TEST_ARRAY_TARGET,
+	if (WARN(!pmalloc_wr_int(pool, array + TEST_ARRAY_TARGET,
 					 0x5A),
 		 "Failed to alter int variable"))
 		goto destroy_pool;
@@ -276,27 +272,27 @@ static bool test_pmalloc_rare_write_int(void)
 			 "Unexpected value in test array."))
 			goto destroy_pool;
 	retval = true;
-	pr_success("rare_write_int");
+	pr_success("wr_int");
 destroy_pool:
 	pmalloc_destroy_pool(pool);
 	return retval;
 }
 
-static bool test_pmalloc_rare_write_uint(void)
+static bool test_pmalloc_wr_uint(void)
 {
 	struct pmalloc_pool *pool;
 	unsigned int *array;
 	unsigned int i;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	array = pmalloc(pool, sizeof(unsigned int) * TEST_ARRAY_SIZE);
 	if (WARN(!array, MSG_NO_PMEM))
 		goto destroy_pool;
 	for (i = 0; i < TEST_ARRAY_SIZE; i++)
 		array[i] = 0xA5;
 	pmalloc_protect_pool(pool);
-	if (WARN(!pmalloc_rare_write_uint(pool, array + TEST_ARRAY_TARGET,
+	if (WARN(!pmalloc_wr_uint(pool, array + TEST_ARRAY_TARGET,
 					  0x5A),
 		 "Failed to alter unsigned int variable"))
 		goto destroy_pool;
@@ -305,27 +301,27 @@ static bool test_pmalloc_rare_write_uint(void)
 			 "Unexpected value in test array."))
 			goto destroy_pool;
 	retval = true;
-	pr_success("rare_write_uint");
+	pr_success("wr_uint");
 destroy_pool:
 	pmalloc_destroy_pool(pool);
 	return retval;
 }
 
-static bool test_pmalloc_rare_write_long(void)
+static bool test_pmalloc_wr_long(void)
 {
 	struct pmalloc_pool *pool;
 	long *array;
 	unsigned int i;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	array = pmalloc(pool, sizeof(long) * TEST_ARRAY_SIZE);
 	if (WARN(!array, MSG_NO_PMEM))
 		goto destroy_pool;
 	for (i = 0; i < TEST_ARRAY_SIZE; i++)
 		array[i] = 0xA5;
 	pmalloc_protect_pool(pool);
-	if (WARN(!pmalloc_rare_write_long(pool, array + TEST_ARRAY_TARGET,
+	if (WARN(!pmalloc_wr_long(pool, array + TEST_ARRAY_TARGET,
 					  0x5A),
 		 "Failed to alter long variable"))
 		goto destroy_pool;
@@ -334,27 +330,27 @@ static bool test_pmalloc_rare_write_long(void)
 			 "Unexpected value in test array."))
 			goto destroy_pool;
 	retval = true;
-	pr_success("rare_write_long");
+	pr_success("wr_long");
 destroy_pool:
 	pmalloc_destroy_pool(pool);
 	return retval;
 }
 
-static bool test_pmalloc_rare_write_ulong(void)
+static bool test_pmalloc_wr_ulong(void)
 {
 	struct pmalloc_pool *pool;
 	unsigned long *array;
 	unsigned int i;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	array = pmalloc(pool, sizeof(unsigned long) * TEST_ARRAY_SIZE);
 	if (WARN(!array, MSG_NO_PMEM))
 		goto destroy_pool;
 	for (i = 0; i < TEST_ARRAY_SIZE; i++)
 		array[i] = 0xA5;
 	pmalloc_protect_pool(pool);
-	if (WARN(!pmalloc_rare_write_ulong(pool, array + TEST_ARRAY_TARGET,
+	if (WARN(!pmalloc_wr_ulong(pool, array + TEST_ARRAY_TARGET,
 					   0x5A),
 		 "Failed to alter unsigned long variable"))
 		goto destroy_pool;
@@ -363,27 +359,27 @@ static bool test_pmalloc_rare_write_ulong(void)
 			 "Unexpected value in test array."))
 			goto destroy_pool;
 	retval = true;
-	pr_success("rare_write_ulong");
+	pr_success("wr_ulong");
 destroy_pool:
 	pmalloc_destroy_pool(pool);
 	return retval;
 }
 
-static bool test_pmalloc_rare_write_longlong(void)
+static bool test_pmalloc_wr_longlong(void)
 {
 	struct pmalloc_pool *pool;
 	long long *array;
 	unsigned int i;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	array = pmalloc(pool, sizeof(long long) * TEST_ARRAY_SIZE);
 	if (WARN(!array, MSG_NO_PMEM))
 		goto destroy_pool;
 	for (i = 0; i < TEST_ARRAY_SIZE; i++)
 		array[i] = 0xA5;
 	pmalloc_protect_pool(pool);
-	if (WARN(!pmalloc_rare_write_longlong(pool,
+	if (WARN(!pmalloc_wr_longlong(pool,
 					      array + TEST_ARRAY_TARGET,
 					      0x5A),
 		 "Failed to alter long variable"))
@@ -393,27 +389,27 @@ static bool test_pmalloc_rare_write_longlong(void)
 			 "Unexpected value in test array."))
 			goto destroy_pool;
 	retval = true;
-	pr_success("rare_write_longlong");
+	pr_success("wr_longlong");
 destroy_pool:
 	pmalloc_destroy_pool(pool);
 	return retval;
 }
 
-static bool test_pmalloc_rare_write_ulonglong(void)
+static bool test_pmalloc_wr_ulonglong(void)
 {
 	struct pmalloc_pool *pool;
 	unsigned long long *array;
 	unsigned int i;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	array = pmalloc(pool, sizeof(unsigned long long) * TEST_ARRAY_SIZE);
 	if (WARN(!array, MSG_NO_PMEM))
 		goto destroy_pool;
 	for (i = 0; i < TEST_ARRAY_SIZE; i++)
 		array[i] = 0xA5;
 	pmalloc_protect_pool(pool);
-	if (WARN(!pmalloc_rare_write_ulonglong(pool,
+	if (WARN(!pmalloc_wr_ulonglong(pool,
 					       array + TEST_ARRAY_TARGET,
 					       0x5A),
 		 "Failed to alter unsigned long long variable"))
@@ -423,27 +419,27 @@ static bool test_pmalloc_rare_write_ulonglong(void)
 			 "Unexpected value in test array."))
 			goto destroy_pool;
 	retval = true;
-	pr_success("rare_write_ulonglong");
+	pr_success("wr_ulonglong");
 destroy_pool:
 	pmalloc_destroy_pool(pool);
 	return retval;
 }
 
-static bool test_pmalloc_rare_write_ptr(void)
+static bool test_pmalloc_wr_ptr(void)
 {
 	struct pmalloc_pool *pool;
 	int **array;
 	unsigned int i;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	array = pmalloc(pool, sizeof(int *) * TEST_ARRAY_SIZE);
 	if (WARN(!array, MSG_NO_PMEM))
 		goto destroy_pool;
 	for (i = 0; i < TEST_ARRAY_SIZE; i++)
 		array[i] = NULL;
 	pmalloc_protect_pool(pool);
-	if (WARN(!pmalloc_rare_write_ptr(pool, array + TEST_ARRAY_TARGET,
+	if (WARN(!pmalloc_wr_ptr(pool, array + TEST_ARRAY_TARGET,
 					       array),
 		 "Failed to alter ptr variable"))
 		goto destroy_pool;
@@ -453,25 +449,25 @@ static bool test_pmalloc_rare_write_ptr(void)
 			 "Unexpected value in test array."))
 			goto destroy_pool;
 	retval = true;
-	pr_success("rare_write_ptr");
+	pr_success("wr_ptr");
 destroy_pool:
 	pmalloc_destroy_pool(pool);
 	return retval;
 
 }
 
-static bool test_specialized_rare_writes(void)
+static bool test_specialized_wrs(void)
 {
-	if (WARN(!(test_pmalloc_rare_write_char() &&
-		   test_pmalloc_rare_write_short() &&
-		   test_pmalloc_rare_write_ushort() &&
-		   test_pmalloc_rare_write_int() &&
-		   test_pmalloc_rare_write_uint() &&
-		   test_pmalloc_rare_write_long() &&
-		   test_pmalloc_rare_write_ulong() &&
-		   test_pmalloc_rare_write_longlong() &&
-		   test_pmalloc_rare_write_ulonglong() &&
-		   test_pmalloc_rare_write_ptr()),
+	if (WARN(!(test_pmalloc_wr_char() &&
+		   test_pmalloc_wr_short() &&
+		   test_pmalloc_wr_ushort() &&
+		   test_pmalloc_wr_int() &&
+		   test_pmalloc_wr_uint() &&
+		   test_pmalloc_wr_long() &&
+		   test_pmalloc_wr_ulong() &&
+		   test_pmalloc_wr_longlong() &&
+		   test_pmalloc_wr_ulonglong() &&
+		   test_pmalloc_wr_ptr()),
 		 "specialized rare writesled"))
 		return false;
 	pr_success("specialized rare writes");
@@ -482,38 +478,38 @@ static bool test_specialized_rare_writes(void)
 /* -------------- tests that forbidden writes are caught -------------- */
 
 /* Test that rare write will refuse to operate on RO pools. */
-static bool test_illegal_rare_write_ro_pool(void)
+static bool test_illegal_wr_ro_pool(void)
 {
 	struct pmalloc_pool *pool;
 	int *var_ptr;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RO);
+	create_pool_or_return(pool, PMALLOC_RO);
 	var_ptr = pmalloc(pool, sizeof(int));
 	if (WARN(!var_ptr, MSG_NO_PMEM))
 		goto destroy_pool;
 	*var_ptr = 0xA5;
 	pmalloc_protect_pool(pool);
-	pr_expect_warn("Illegal rare_write to R/O pool");
-	if (WARN(pmalloc_rare_write_int(pool, var_ptr, 0x5A),
+	pr_expect_warn("Illegal wr to R/O pool");
+	if (WARN(pmalloc_wr_int(pool, var_ptr, 0x5A),
 		 "Unexpected successful write to R/O protected pool"))
 		goto destroy_pool;
 	retval = true;
-	pr_success("Illegal rare_write to RO pool");
+	pr_success("Illegal wr to RO pool");
 destroy_pool:
 	pmalloc_destroy_pool(pool);
 	return retval;
 }
 
 /* Test that pmalloc rare write will refuse to operate on static memory. */
-static int rare_write_data __rare_write_after_init = 0xA5;
-static bool test_illegal_rare_write_static_rare_write_mem(void)
+static int wr_data __wr_after_init = 0xA5;
+static bool test_illegal_wr_static_wr_mem(void)
 {
 	struct pmalloc_pool *pool;
 	int *dummy;
 	bool write_result;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	dummy = pmalloc(pool, sizeof(*dummy));
 	if (WARN(!dummy, MSG_NO_PMEM)) {
 		pmalloc_destroy_pool(pool);
@@ -521,25 +517,25 @@ static bool test_illegal_rare_write_static_rare_write_mem(void)
 	}
 	*dummy = 1;
 	pmalloc_protect_pool(pool);
-	pr_expect_warn("Illegal rare_write to static memory");
-	write_result = pmalloc_rare_write_int(pool, &rare_write_data, 0x5A);
+	pr_expect_warn("Illegal wr to static memory");
+	write_result = pmalloc_wr_int(pool, &wr_data, 0x5A);
 	pmalloc_destroy_pool(pool);
-	if (WARN(write_result || rare_write_data != 0xA5,
+	if (WARN(write_result || wr_data != 0xA5,
 		 "Unexpected successful write to static memory"))
 		return false;
-	pr_success("Illegal rare_write to static memory");
+	pr_success("Illegal wr to static memory");
 	return true;
 }
 
 /* Test that pmalloc rare write will refuse to operate on const. */
 static const int const_data = 0xA5;
-static bool test_illegal_rare_write_const(void)
+static bool test_illegal_wr_const(void)
 {
 	struct pmalloc_pool *pool;
 	int *dummy;
 	bool write_result;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	dummy = pmalloc(pool, sizeof(*dummy));
 	if (WARN(!dummy, MSG_NO_PMEM)) {
 		pmalloc_destroy_pool(pool);
@@ -547,25 +543,25 @@ static bool test_illegal_rare_write_const(void)
 	}
 	*dummy = 1;
 	pmalloc_protect_pool(pool);
-	pr_expect_warn("Illegal rare_write to const");
-	write_result = pmalloc_rare_write_int(pool, &const_data, 0x5A);
+	pr_expect_warn("Illegal wr to const");
+	write_result = pmalloc_wr_int(pool, &const_data, 0x5A);
 	pmalloc_destroy_pool(pool);
 	if (WARN(write_result || const_data != 0xA5,
 		 "Unexpected successful write to const memory"))
 		return false;
-	pr_success("Illegal rare_write to const memory");
+	pr_success("Illegal wr to const memory");
 	return true;
 }
 
 /* Test that pmalloc rare write will refuse to operate on ro_after_init. */
 static int ro_after_init_data __ro_after_init = 0xA5;
-static bool test_illegal_rare_write_ro_after_init(void)
+static bool test_illegal_wr_ro_after_init(void)
 {
 	struct pmalloc_pool *pool;
 	int *dummy;
 	bool write_result;
 
-	create_pool_or_return(pool, PMALLOC_POOL_RW);
+	create_pool_or_return(pool, PMALLOC_WR);
 	dummy = pmalloc(pool, sizeof(*dummy));
 	if (WARN(!dummy, MSG_NO_PMEM)) {
 		pmalloc_destroy_pool(pool);
@@ -573,25 +569,25 @@ static bool test_illegal_rare_write_ro_after_init(void)
 	}
 	*dummy = 1;
 	pmalloc_protect_pool(pool);
-	pr_expect_warn("Illegal rare_write to ro_after_init");
-	write_result = pmalloc_rare_write_int(pool, &ro_after_init_data, 0x5A);
+	pr_expect_warn("Illegal wr to ro_after_init");
+	write_result = pmalloc_wr_int(pool, &ro_after_init_data, 0x5A);
 	pmalloc_destroy_pool(pool);
 	if (WARN(write_result || ro_after_init_data != 0xA5,
 		 "Unexpected successful write to ro_after_init memory"))
 		return false;
-	pr_success("Illegal rare_write to ro_after_init memory");
+	pr_success("Illegal wr to ro_after_init memory");
 	return true;
 }
 
-static bool test_illegal_rare_writes(void)
+static bool test_illegal_wrs(void)
 {
-	if (WARN(!(test_illegal_rare_write_ro_after_init() &&
-		   test_illegal_rare_write_static_rare_write_mem() &&
-		   test_illegal_rare_write_const() &&
-		   test_illegal_rare_write_ro_pool()),
+	if (WARN(!(test_illegal_wr_ro_after_init() &&
+		   test_illegal_wr_static_wr_mem() &&
+		   test_illegal_wr_const() &&
+		   test_illegal_wr_ro_pool()),
 		 "Illegal rare writes tests failed"))
 		return false;
-	pr_success("illegal rare writes");
+	pr_success("Illegal rare writes");
 	return true;
 }
 
@@ -604,7 +600,7 @@ static bool test_auto_ro(void)
 	int *second_chunk;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_AUTO_RO);
+	create_pool_or_return(pool, PMALLOC_AUTO_RO);
 	first_chunk = (int *)pmalloc(pool, PMALLOC_DEFAULT_REFILL_SIZE);
 	if (WARN(!first_chunk, MSG_NO_PMEM))
 		goto error;
@@ -628,7 +624,7 @@ static bool test_auto_rw(void)
 	int *second_chunk;
 	bool retval = false;
 
-	create_pool_or_return(pool, PMALLOC_POOL_AUTO_RW);
+	create_pool_or_return(pool, PMALLOC_AUTO);
 	first_chunk = (int *)pmalloc(pool, PMALLOC_DEFAULT_REFILL_SIZE);
 	if (WARN(!first_chunk, MSG_NO_PMEM))
 		goto error;
@@ -638,7 +634,7 @@ static bool test_auto_rw(void)
 	if (WARN(!pmalloc_is_address_protected(first_chunk),
 		 "Failed to automatically write protect exhausted vmarea"))
 		goto error;
-	pr_success("AUTO_RW");
+	pr_success("AUTO_WR");
 	retval = true;
 error:
 	pmalloc_destroy_pool(pool);
@@ -652,7 +648,7 @@ static bool test_start_rw(void)
 	bool retval = false;
 	int i;
 
-	create_pool_or_return(pool, PMALLOC_POOL_START_RW);
+	create_pool_or_return(pool, PMALLOC_START);
 	for (i = 0; i < 2; i++) {
 		chunks[i] = (int *)pmalloc(pool, 1);
 		if (WARN(!chunks[i], MSG_NO_PMEM))
@@ -662,9 +658,9 @@ static bool test_start_rw(void)
 			goto error;
 	}
 	if (WARN(vmalloc_to_page(chunks[0]) != vmalloc_to_page(chunks[1]),
-		 "START_RW: mostly empty vmap area not reused"))
+		 "START: mostly empty vmap area not reused"))
 		goto error;
-	pr_success("START_RW");
+	pr_success("START");
 	retval = true;
 error:
 	pmalloc_destroy_pool(pool);
@@ -690,9 +686,9 @@ static int __init test_pmalloc_init_module(void)
 	if (WARN(!(create_and_destroy_pool() &&
 		   test_alloc() &&
 		   test_is_pmalloc_object() &&
-		   test_pmalloc_rare_write_array() &&
-		   test_specialized_rare_writes() &&
-		   test_illegal_rare_writes() &&
+		   test_pmalloc_wr_array() &&
+		   test_specialized_wrs() &&
+		   test_illegal_wrs() &&
 		   test_self_protection()),
 		 "protected memory allocator test failed"))
 		return -EFAULT;
