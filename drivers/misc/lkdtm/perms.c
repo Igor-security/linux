@@ -128,26 +128,27 @@ void lkdtm_WRITE_WR_AFTER_INIT(void)
 }
 
 #ifdef CONFIG_PROTECTABLE_MEMORY
+
+static const char MSG_NO_POOL[] = "Cannot allocate memory for the pool.";
+static const char MSG_NO_PMEM[] = "Cannot allocate memory from the pool.";
+
 void lkdtm_WRITE_RO_PMALLOC(void)
 {
 	struct pmalloc_pool *pool;
 	int *i;
 
 	pool = pmalloc_create_pool(PMALLOC_RO);
-	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
+	if (WARN(!pool, MSG_NO_POOL))
 		return;
-
 	i = pmalloc(pool, sizeof(int));
-	if (WARN(!i, "Failed allocating memory for pmalloc test.")) {
+	if (WARN(!i, MSG_NO_PMEM)) {
 		pmalloc_destroy_pool(pool);
 		return;
 	}
-
 	*i = INT_MAX;
 	pmalloc_protect_pool(pool);
-
 	pr_info("attempting bad pmalloc write at %p\n", i);
-	*i = 0;
+	*i = 0; /* Note: this will crash and leak the pool memory. */
 }
 
 void lkdtm_WRITE_AUTO_RO_PMALLOC(void)
@@ -156,19 +157,17 @@ void lkdtm_WRITE_AUTO_RO_PMALLOC(void)
 	int *i;
 
 	pool = pmalloc_create_pool(PMALLOC_AUTO_RO);
-	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
+	if (WARN(!pool, MSG_NO_POOL))
 		return;
-
 	i = pmalloc(pool, sizeof(int));
-	if (WARN(!i, "Failed allocating memory for pmalloc test.")) {
+	if (WARN(!i, MSG_NO_PMEM)) {
 		pmalloc_destroy_pool(pool);
 		return;
 	}
-
 	*i = INT_MAX;
 	pmalloc(pool, PMALLOC_DEFAULT_REFILL_SIZE);
 	pr_info("attempting bad pmalloc write at %p\n", i);
-	*i = 0;
+	*i = 0; /* Note: this will crash and leak the pool memory. */
 }
 
 void lkdtm_WRITE_WR_PMALLOC(void)
@@ -177,20 +176,17 @@ void lkdtm_WRITE_WR_PMALLOC(void)
 	int *i;
 
 	pool = pmalloc_create_pool(PMALLOC_WR);
-	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
+	if (WARN(!pool, MSG_NO_POOL))
 		return;
-
 	i = pmalloc(pool, sizeof(int));
-	if (WARN(!i, "Failed allocating memory for pmalloc test.")) {
+	if (WARN(!i, MSG_NO_PMEM)) {
 		pmalloc_destroy_pool(pool);
 		return;
 	}
-
 	*i = INT_MAX;
 	pmalloc_protect_pool(pool);
-
 	pr_info("attempting bad pmalloc write at %p\n", i);
-	*i = 0;
+	*i = 0; /* Note: this will crash and leak the pool memory. */
 }
 
 void lkdtm_WRITE_AUTO_WR_PMALLOC(void)
@@ -199,19 +195,17 @@ void lkdtm_WRITE_AUTO_WR_PMALLOC(void)
 	int *i;
 
 	pool = pmalloc_create_pool(PMALLOC_AUTO_WR);
-	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
+	if (WARN(!pool, MSG_NO_POOL))
 		return;
-
 	i = pmalloc(pool, sizeof(int));
-	if (WARN(!i, "Failed allocating memory for pmalloc test.")) {
+	if (WARN(!i, MSG_NO_PMEM)) {
 		pmalloc_destroy_pool(pool);
 		return;
 	}
-
 	*i = INT_MAX;
 	pmalloc(pool, PMALLOC_DEFAULT_REFILL_SIZE);
 	pr_info("attempting bad pmalloc write at %p\n", i);
-	*i = 0;
+	*i = 0; /* Note: this will crash and leak the pool memory. */
 }
 
 void lkdtm_WRITE_START_WR_PMALLOC(void)
@@ -220,20 +214,120 @@ void lkdtm_WRITE_START_WR_PMALLOC(void)
 	int *i;
 
 	pool = pmalloc_create_pool(PMALLOC_START_WR);
-	if (WARN(!pool, "Failed preparing pool for pmalloc test."))
+	if (WARN(!pool, MSG_NO_POOL))
 		return;
-
 	i = pmalloc(pool, sizeof(int));
-	if (WARN(!i, "Failed allocating memory for pmalloc test.")) {
+	if (WARN(!i, MSG_NO_PMEM)) {
 		pmalloc_destroy_pool(pool);
 		return;
 	}
-
 	*i = INT_MAX;
 	pr_info("attempting bad pmalloc write at %p\n", i);
-	*i = 0;
+	*i = 0; /* Note: this will crash and leak the pool memory. */
 }
 
+void lkdtm_WRITE_WR_PMALLOC_ON_RO_PMALLOC(void)
+{
+	struct pmalloc_pool *pool;
+	int *var_ptr;
+
+	pool = pmalloc_create_pool(PMALLOC_RO);
+	if (WARN(!pool, MSG_NO_POOL))
+		return;
+	var_ptr = pmalloc(pool, sizeof(int));
+	if (WARN(!var_ptr, MSG_NO_PMEM)) {
+		pmalloc_destroy_pool(pool);
+		return;
+	}
+	*var_ptr = 0xA5;
+	pmalloc_protect_pool(pool);
+	pr_info("attempting illegal write rare to R/O pool");
+	if (WARN(pmalloc_wr_int(pool, var_ptr, 0x5A),
+		 "Unexpected successful write to R/O protected pool"))
+	pmalloc_destroy_pool(pool);
+}
+
+static int wr_data __wr_after_init = 0xA5;
+void lkdtm_WRITE_WR_PMALLOC_ON_STATIC_WR(void)
+{
+	struct pmalloc_pool *pool;
+	int *dummy;
+	bool write_result;
+
+	pool = pmalloc_create_pool(PMALLOC_WR);
+	if (WARN(!pool, MSG_NO_POOL))
+		return;
+	dummy = pmalloc(pool, sizeof(*dummy));
+	if (WARN(!dummy, MSG_NO_PMEM)) {
+		pmalloc_destroy_pool(pool);
+		return;
+	}
+	*dummy = 1;
+	pmalloc_protect_pool(pool);
+	pr_info("attempting illegal write rare to static memory");
+	write_result = pmalloc_wr_int(pool, &wr_data, 0x5A);
+	pmalloc_destroy_pool(pool);
+	WARN(write_result || wr_data != 0xA5,
+	     "Unexpected successful write to static memory");
+}
+
+static const int const_data = 0xA5;
+void lkdtm_WRITE_WR_PMALLOC_ON_CONST(void)
+{
+	struct pmalloc_pool *pool;
+	int *dummy;
+	bool write_result;
+
+	/*
+	 * The pool operations are only meant to simulate an attacker
+	 * using a random pool as parameter for the attack against the
+	 * const.
+	 */
+	pool = pmalloc_create_pool(PMALLOC_WR);
+	if (WARN(!pool, MSG_NO_POOL))
+		return;
+	dummy = pmalloc(pool, sizeof(*dummy));
+	if (WARN(!dummy, MSG_NO_PMEM)) {
+		pmalloc_destroy_pool(pool);
+		return;
+	}
+	*dummy = 1;
+	pmalloc_protect_pool(pool);
+	pr_info("attempting illegal write rare to const data");
+	write_result = pmalloc_wr_int(pool, &const_data, 0x5A);
+	pmalloc_destroy_pool(pool);
+	WARN(write_result || const_data != 0xA5,
+	     "Unexpected successful write to const memory");
+}
+
+static int ro_after_init_data __ro_after_init = 0xA5;
+void lkdtm_WRITE_WR_PMALLOC_ON_RO_AFT_INIT(void)
+{
+	struct pmalloc_pool *pool;
+	int *dummy;
+	bool write_result;
+
+	/*
+	 * The pool operations are only meant to simulate an attacker
+	 * using a random pool as parameter for the attack against the
+	 * const.
+	 */
+	pool = pmalloc_create_pool(PMALLOC_WR);
+	if (WARN(!pool, MSG_NO_POOL))
+		return;
+	dummy = pmalloc(pool, sizeof(*dummy));
+	if (WARN(!dummy, MSG_NO_PMEM)) {
+		pmalloc_destroy_pool(pool);
+		return;
+	}
+	*dummy = 1;
+	pmalloc_protect_pool(pool);
+	pr_info("attempting illegal write rare to ro_after_init");
+	write_result = pmalloc_wr_int(pool, &ro_after_init_data, 0x5A);
+	pmalloc_destroy_pool(pool);
+	WARN(write_result || ro_after_init_data != 0xA5,
+	     "Unexpected successful write to ro_after_init memory");
+}
 #endif
 
 void lkdtm_WRITE_KERN(void)
