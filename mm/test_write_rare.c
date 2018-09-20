@@ -97,7 +97,6 @@ static bool test_cross_page_write(void)
 	return true;
 }
 
-
 static bool test_memsetting(void)
 {
 	unsigned int i;
@@ -208,53 +207,13 @@ static bool test_specialized_write_rare(void)
 	return true;
 }
 
-/* Verify that write rare will not work against read-only memory. */
-static int ro_after_init_data __ro_after_init = INIT_VAL;
-static bool test_illegal_wr_ro_after_init(void)
-{
-	pr_info("Illegal write rare to const memory - it should WARN");
-	if (WARN(wr_int(&ro_after_init_data, END_VAL) ||
-		 ro_after_init_data == END_VAL,
-		 "Unexpected successful write to const memory"))
-		return false;
-	pr_success("Illegal write rare to const memory");
-	return true;
-}
-
-/*
- * "volatile" to force the compiler to not optimize away the reading back.
- * Is there a better way to do it, than using volatile?
- */
-static volatile const int const_data = INIT_VAL;
-static bool test_illegal_wr_const(void)
-{
-	pr_info("Illegal write rare to __ro_after_init - it should WARN");
-	if (WARN(wr_int((int *)&const_data, END_VAL) ||
-		 const_data == END_VAL,
-		 "Unexpected successful write to __ro_after_init memory"))
-		return false;
-	pr_success("Illegal write rare to __ro_after_init memory");
-	return true;
-}
-
-static bool test_illegal_write_rare(void)
-{
-	if (WARN(!(test_illegal_wr_ro_after_init() &&
-		   test_illegal_wr_const()),
-		 "Illegal static write rares test failed"))
-		return false;
-	pr_success("Illegal static write rares");
-	return true;
-}
-
 static int __init test_static_wr_init_module(void)
 {
 	if (WARN(!(test_alignment() &&
 		   test_simple_write() &&
 		   test_cross_page_write() &&
 		   test_memsetting() &&
-		   test_specialized_write_rare() &&
-		   test_illegal_write_rare()),
+		   test_specialized_write_rare()),
 		 "static rare-write test failed"))
 		return -EFAULT;
 	pr_success("static write_rare");
