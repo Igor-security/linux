@@ -127,10 +127,36 @@ void lkdtm_WRITE_WR_AFTER_INIT(void)
 	*ptr ^= 0xabcd1234;
 }
 
+#define INIT_VAL 0x5A
+#define END_VAL 0xA5
+
+/* Verify that write rare will not work against read-only memory. */
+static int ro_after_init_data __ro_after_init = INIT_VAL;
+void lkdtm_WRITE_WR_AFTER_INIT_ON_RO_AFTER_INIT(void)
+{
+	pr_info("attempting illegal write rare to __ro_after_init");
+	if (wr_int(&ro_after_init_data, END_VAL) ||
+	     ro_after_init_data == END_VAL)
+		pr_info("Unexpected successful write to __ro_after_init "
+			"memory");
+}
+
+/*
+ * "volatile" to force the compiler to not optimize away the reading back.
+ * Is there a better way to do it, than using volatile?
+ */
+static volatile const int const_data = INIT_VAL;
+void lkdtm_WRITE_WR_AFTER_INIT_ON_CONST(void)
+{
+	pr_info("attempting illegal write rare to const data");
+	if (wr_int((int *)&const_data, END_VAL) || const_data == END_VAL)
+		pr_info("Unexpected successful write to const memory");
+}
+
 #ifdef CONFIG_PROTECTABLE_MEMORY
 
-static const char MSG_NO_POOL[] = "Cannot allocate memory for the pool.";
-static const char MSG_NO_PMEM[] = "Cannot allocate memory from the pool.";
+#define MSG_NO_POOL "Cannot allocate memory for the pool."
+#define MSG_NO_PMEM "Cannot allocate memory from the pool."
 
 void lkdtm_WRITE_RO_PMALLOC(void)
 {
@@ -138,10 +164,13 @@ void lkdtm_WRITE_RO_PMALLOC(void)
 	int *i;
 
 	pool = pmalloc_create_pool(PMALLOC_RO);
-	if (WARN(!pool, MSG_NO_POOL))
+	if (!pool) {
+		pr_info(MSG_NO_POOL);
 		return;
+	}
 	i = pmalloc(pool, sizeof(int));
-	if (WARN(!i, MSG_NO_PMEM)) {
+	if (!i) {
+		pr_info(MSG_NO_PMEM);
 		pmalloc_destroy_pool(pool);
 		return;
 	}
@@ -157,10 +186,13 @@ void lkdtm_WRITE_AUTO_RO_PMALLOC(void)
 	int *i;
 
 	pool = pmalloc_create_pool(PMALLOC_AUTO_RO);
-	if (WARN(!pool, MSG_NO_POOL))
+	if (!pool) {
+		pr_info(MSG_NO_POOL);
 		return;
+	}
 	i = pmalloc(pool, sizeof(int));
-	if (WARN(!i, MSG_NO_PMEM)) {
+	if (!i) {
+		pr_info(MSG_NO_PMEM);
 		pmalloc_destroy_pool(pool);
 		return;
 	}
@@ -176,10 +208,13 @@ void lkdtm_WRITE_WR_PMALLOC(void)
 	int *i;
 
 	pool = pmalloc_create_pool(PMALLOC_WR);
-	if (WARN(!pool, MSG_NO_POOL))
+	if (!pool) {
+		pr_info(MSG_NO_POOL);
 		return;
+	}
 	i = pmalloc(pool, sizeof(int));
-	if (WARN(!i, MSG_NO_PMEM)) {
+	if (!i) {
+		pr_info(MSG_NO_PMEM);
 		pmalloc_destroy_pool(pool);
 		return;
 	}
@@ -195,10 +230,13 @@ void lkdtm_WRITE_AUTO_WR_PMALLOC(void)
 	int *i;
 
 	pool = pmalloc_create_pool(PMALLOC_AUTO_WR);
-	if (WARN(!pool, MSG_NO_POOL))
+	if (!pool) {
+		pr_info(MSG_NO_POOL);
 		return;
+	}
 	i = pmalloc(pool, sizeof(int));
-	if (WARN(!i, MSG_NO_PMEM)) {
+	if (!i) {
+		pr_info(MSG_NO_PMEM);
 		pmalloc_destroy_pool(pool);
 		return;
 	}
@@ -214,10 +252,13 @@ void lkdtm_WRITE_START_WR_PMALLOC(void)
 	int *i;
 
 	pool = pmalloc_create_pool(PMALLOC_START_WR);
-	if (WARN(!pool, MSG_NO_POOL))
+	if (!pool) {
+		pr_info(MSG_NO_POOL);
 		return;
+	}
 	i = pmalloc(pool, sizeof(int));
-	if (WARN(!i, MSG_NO_PMEM)) {
+	if (!i) {
+		pr_info(MSG_NO_PMEM);
 		pmalloc_destroy_pool(pool);
 		return;
 	}
@@ -232,22 +273,25 @@ void lkdtm_WRITE_WR_PMALLOC_ON_RO_PMALLOC(void)
 	int *var_ptr;
 
 	pool = pmalloc_create_pool(PMALLOC_RO);
-	if (WARN(!pool, MSG_NO_POOL))
+	if (!pool) {
+		pr_info(MSG_NO_POOL);
 		return;
+	}
 	var_ptr = pmalloc(pool, sizeof(int));
-	if (WARN(!var_ptr, MSG_NO_PMEM)) {
+	if (!var_ptr) {
+		pr_info(MSG_NO_PMEM);
 		pmalloc_destroy_pool(pool);
 		return;
 	}
-	*var_ptr = 0xA5;
+	*var_ptr = INIT_VAL;
 	pmalloc_protect_pool(pool);
 	pr_info("attempting illegal write rare to R/O pool");
-	if (WARN(pmalloc_wr_int(pool, var_ptr, 0x5A),
-		 "Unexpected successful write to R/O protected pool"))
+	if (pmalloc_wr_int(pool, var_ptr, END_VAL))
+	    pr_info("Unexpected successful write to R/O protected pool");
 	pmalloc_destroy_pool(pool);
 }
 
-static int wr_data __wr_after_init = 0xA5;
+static int wr_data __wr_after_init = INIT_VAL;
 void lkdtm_WRITE_WR_PMALLOC_ON_STATIC_WR(void)
 {
 	struct pmalloc_pool *pool;
@@ -255,23 +299,25 @@ void lkdtm_WRITE_WR_PMALLOC_ON_STATIC_WR(void)
 	bool write_result;
 
 	pool = pmalloc_create_pool(PMALLOC_WR);
-	if (WARN(!pool, MSG_NO_POOL))
+	if (!pool) {
+		pr_info(MSG_NO_POOL);
 		return;
+	}
 	dummy = pmalloc(pool, sizeof(*dummy));
-	if (WARN(!dummy, MSG_NO_PMEM)) {
+	if (!dummy) {
+		pr_info(MSG_NO_PMEM);
 		pmalloc_destroy_pool(pool);
 		return;
 	}
 	*dummy = 1;
 	pmalloc_protect_pool(pool);
 	pr_info("attempting illegal write rare to static memory");
-	write_result = pmalloc_wr_int(pool, &wr_data, 0x5A);
+	write_result = pmalloc_wr_int(pool, &wr_data, END_VAL);
 	pmalloc_destroy_pool(pool);
-	WARN(write_result || wr_data != 0xA5,
-	     "Unexpected successful write to static memory");
+	if (write_result || wr_data != INIT_VAL)
+		pr_info("Unexpected successful write to static memory");
 }
 
-static const int const_data = 0xA5;
 void lkdtm_WRITE_WR_PMALLOC_ON_CONST(void)
 {
 	struct pmalloc_pool *pool;
@@ -284,23 +330,25 @@ void lkdtm_WRITE_WR_PMALLOC_ON_CONST(void)
 	 * const.
 	 */
 	pool = pmalloc_create_pool(PMALLOC_WR);
-	if (WARN(!pool, MSG_NO_POOL))
+	if (!pool) {
+		pr_info(MSG_NO_POOL);
 		return;
+	}
 	dummy = pmalloc(pool, sizeof(*dummy));
-	if (WARN(!dummy, MSG_NO_PMEM)) {
+	if (!dummy) {
+		pr_info(MSG_NO_PMEM);
 		pmalloc_destroy_pool(pool);
 		return;
 	}
 	*dummy = 1;
 	pmalloc_protect_pool(pool);
 	pr_info("attempting illegal write rare to const data");
-	write_result = pmalloc_wr_int(pool, &const_data, 0x5A);
+	write_result = pmalloc_wr_int(pool, (int *)&const_data, END_VAL);
 	pmalloc_destroy_pool(pool);
-	WARN(write_result || const_data != 0xA5,
-	     "Unexpected successful write to const memory");
+	if (write_result || const_data != INIT_VAL)
+		pr_info("Unexpected successful write to const memory");
 }
 
-static int ro_after_init_data __ro_after_init = 0xA5;
 void lkdtm_WRITE_WR_PMALLOC_ON_RO_AFT_INIT(void)
 {
 	struct pmalloc_pool *pool;
@@ -323,9 +371,9 @@ void lkdtm_WRITE_WR_PMALLOC_ON_RO_AFT_INIT(void)
 	*dummy = 1;
 	pmalloc_protect_pool(pool);
 	pr_info("attempting illegal write rare to ro_after_init");
-	write_result = pmalloc_wr_int(pool, &ro_after_init_data, 0x5A);
+	write_result = pmalloc_wr_int(pool, &ro_after_init_data, END_VAL);
 	pmalloc_destroy_pool(pool);
-	WARN(write_result || ro_after_init_data != 0xA5,
+	WARN(write_result || ro_after_init_data != INIT_VAL,
 	     "Unexpected successful write to ro_after_init memory");
 }
 #endif

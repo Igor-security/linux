@@ -39,6 +39,8 @@ void __init lkdtm_perms_init(void);
 void lkdtm_WRITE_RO(void);
 void lkdtm_WRITE_RO_AFTER_INIT(void);
 void lkdtm_WRITE_WR_AFTER_INIT(void);
+void lkdtm_WRITE_WR_AFTER_INIT_ON_RO_AFTER_INIT(void);
+void lkdtm_WRITE_WR_AFTER_INIT_ON_CONST(void);
 #ifdef CONFIG_PROTECTABLE_MEMORY
 void lkdtm_WRITE_RO_PMALLOC(void);
 void lkdtm_WRITE_AUTO_RO_PMALLOC(void);
