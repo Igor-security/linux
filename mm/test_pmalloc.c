@@ -22,14 +22,11 @@
 #define SIZE_1 (PAGE_SIZE * 3)
 #define SIZE_2 1000
 
-static const char MSG_NO_POOL[] = "Cannot allocate memory for selftest.";
+static const char MSG_NO_POOL[] = "Cannot allocate memory for the pool.";
 static const char MSG_NO_PMEM[] = "Cannot allocate memory from the pool.";
 
 #define pr_success(test_name)	\
 	pr_info(test_name " test passed")
-
-#define pr_expect_warn(test_name)	\
-	pr_info(test_name " - it should WARN")
 
 /* wrapper for __is_pmalloc_addr() with messages */
 static inline bool validate_alloc(bool expected, void *addr)
@@ -37,7 +34,7 @@ static inline bool validate_alloc(bool expected, void *addr)
 	bool test;
 
 	test = __is_pmalloc_addr(addr);
-	pr_info("must be %s: %s",
+	pr_info("allocation test - the result must be %s: %s",
 		  expected ? "ok" : "nok", test  ? "ok" : "nok");
 	return likely(test == expected);
 }
@@ -651,130 +648,6 @@ static bool test_specialized_wrs(void)
 
 }
 
-/* -------------- tests that forbidden writes are caught -------------- */
-
-/* Test that write rare will refuse to operate on RO pools. */
-static bool test_illegal_wr_ro_pool(void)
-{
-	struct pmalloc_pool *pool;
-	int *var_ptr;
-	bool retval = false;
-
-	pool = pmalloc_create_pool(PMALLOC_RO);
-	if (WARN(!pool, MSG_NO_POOL))
-		return false;
-	var_ptr = pmalloc(pool, sizeof(int));
-	if (WARN(!var_ptr, MSG_NO_PMEM))
-		goto destroy_pool;
-	*var_ptr = 0xA5;
-	pmalloc_protect_pool(pool);
-	pr_expect_warn("Illegal wr to R/O pool");
-	if (WARN(pmalloc_wr_int(pool, var_ptr, 0x5A),
-		 "Unexpected successful write to R/O protected pool"))
-		goto destroy_pool;
-	retval = true;
-	pr_success("Illegal wr to RO pool");
-destroy_pool:
-	pmalloc_destroy_pool(pool);
-	return retval;
-}
-
-/* Test that pmalloc write rare will refuse to operate on static memory. */
-static int wr_data __wr_after_init = 0xA5;
-static bool test_illegal_wr_static_wr_mem(void)
-{
-	struct pmalloc_pool *pool;
-	int *dummy;
-	bool write_result;
-
-	pool = pmalloc_create_pool(PMALLOC_WR);
-	if (WARN(!pool, MSG_NO_POOL))
-		return false;
-	dummy = pmalloc(pool, sizeof(*dummy));
-	if (WARN(!dummy, MSG_NO_PMEM)) {
-		pmalloc_destroy_pool(pool);
-		return false;
-	}
-	*dummy = 1;
-	pmalloc_protect_pool(pool);
-	pr_expect_warn("Illegal wr to static memory");
-	write_result = pmalloc_wr_int(pool, &wr_data, 0x5A);
-	pmalloc_destroy_pool(pool);
-	if (WARN(write_result || wr_data != 0xA5,
-		 "Unexpected successful write to static memory"))
-		return false;
-	pr_success("Illegal wr to static memory");
-	return true;
-}
-
-/* Test that pmalloc write rare will refuse to operate on const. */
-static const int const_data = 0xA5;
-static bool test_illegal_wr_const(void)
-{
-	struct pmalloc_pool *pool;
-	int *dummy;
-	bool write_result;
-
-	pool = pmalloc_create_pool(PMALLOC_WR);
-	if (WARN(!pool, MSG_NO_POOL))
-		return false;
-	dummy = pmalloc(pool, sizeof(*dummy));
-	if (WARN(!dummy, MSG_NO_PMEM)) {
-		pmalloc_destroy_pool(pool);
-		return false;
-	}
-	*dummy = 1;
-	pmalloc_protect_pool(pool);
-	pr_expect_warn("Illegal wr to const");
-	write_result = pmalloc_wr_int(pool, &const_data, 0x5A);
-	pmalloc_destroy_pool(pool);
-	if (WARN(write_result || const_data != 0xA5,
-		 "Unexpected successful write to const memory"))
-		return false;
-	pr_success("Illegal wr to const memory");
-	return true;
-}
-
-/* Test that pmalloc write rare will refuse to operate on ro_after_init. */
-static int ro_after_init_data __ro_after_init = 0xA5;
-static bool test_illegal_wr_ro_after_init(void)
-{
-	struct pmalloc_pool *pool;
-	int *dummy;
-	bool write_result;
-
-	pool = pmalloc_create_pool(PMALLOC_WR);
-	if (WARN(!pool, MSG_NO_POOL))
-		return false;
-	dummy = pmalloc(pool, sizeof(*dummy));
-	if (WARN(!dummy, MSG_NO_PMEM)) {
-		pmalloc_destroy_pool(pool);
-		return false;
-	}
-	*dummy = 1;
-	pmalloc_protect_pool(pool);
-	pr_expect_warn("Illegal wr to ro_after_init");
-	write_result = pmalloc_wr_int(pool, &ro_after_init_data, 0x5A);
-	pmalloc_destroy_pool(pool);
-	if (WARN(write_result || ro_after_init_data != 0xA5,
-		 "Unexpected successful write to ro_after_init memory"))
-		return false;
-	pr_success("Illegal wr to ro_after_init memory");
-	return true;
-}
-
-static bool test_illegal_wrs(void)
-{
-	if (WARN(!(test_illegal_wr_ro_after_init() &&
-		   test_illegal_wr_static_wr_mem() &&
-		   test_illegal_wr_const() &&
-		   test_illegal_wr_ro_pool()),
-		 "Illegal write rare tests failed"))
-		return false;
-	pr_success("Illegal write rare");
-	return true;
-}
-
 /*
  * test_pmalloc()  -main entry point for running the test cases
  */
@@ -787,8 +660,7 @@ static int __init test_pmalloc_init_module(void)
 		   test_pmalloc_wr_memset() &&
 		   test_pmalloc_wr_strdup() &&
 		   test_pmalloc_wr_copy() &&
-		   test_specialized_wrs() &&
-		   test_illegal_wrs()),
+		   test_specialized_wrs()),
 		 "protected memory allocator test failed"))
 		return -EFAULT;
 	pr_success("protected memory allocator");
