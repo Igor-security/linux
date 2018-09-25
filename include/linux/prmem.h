@@ -125,9 +125,10 @@ static inline void *wr_memcpy(void *p, const void *q, __kernel_size_t size)
  *
  * It is provided as macro, to match rcu_assign_pointer()
  */
-#define wr_rcu_assign_pointer(p, v) ({					\
-	__wr_op((unsigned long)&p, v, sizeof(p), WR_RCU_ASSIGN_PTR);	\
-	p;								\
+#define wr_rcu_assign_pointer(p, v) ({				\
+	__wr_op((unsigned long)&p, (unsigned long)v, sizeof(p),	\
+		WR_RCU_ASSIGN_PTR);				\
+	p;							\
 })
 #endif
 #endif
