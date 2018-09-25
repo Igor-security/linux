@@ -9641,6 +9641,13 @@ F:	kernel/sched/membarrier.c
 F:	include/uapi/linux/membarrier.h
 F:	arch/powerpc/include/asm/membarrier.h
 
+MEMORY HARDENING
+M:	Igor Stoppa <igor.stoppa@gmail.com>
+L:	kernel-hardening@lists.openwall.com
+S:	Maintained
+F:	include/linux/prmem.h
+F:	mm/prmem.c
+
 MEMORY MANAGEMENT
 L:	linux-mm@kvack.org
 W:	http://www.linux-mm.org
