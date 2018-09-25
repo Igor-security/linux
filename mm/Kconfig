@@ -142,6 +142,10 @@ config ARCH_DISCARD_MEMBLOCK
 config MEMORY_ISOLATION
 	bool
 
+config PRMEM
+	def_bool n
+	depends on STRICT_KERNEL_RWX && X86_64
+
 #
 # Only be set on architectures that have completely implemented memory hotplug
 # feature. If you are not sure, don't touch it.
