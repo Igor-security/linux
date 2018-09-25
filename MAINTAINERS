@@ -9452,6 +9452,12 @@ F:	include/linux/memory_hotplug.h
 F:	include/linux/vmalloc.h
 F:	mm/
 
+MEMORY HARDENING
+M:	Igor Stoppa <igor.stoppa@huawei.com>
+L:	linux-mm@kvack.org
+S:	Maintained
+F:	include/linux/prmem.h
+
 MEMORY TECHNOLOGY DEVICES (MTD)
 M:	David Woodhouse <dwmw2@infradead.org>
 M:	Brian Norris <computersforpeace@gmail.com>
