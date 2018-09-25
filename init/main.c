@@ -498,6 +498,7 @@ void __init __weak thread_stack_cache_init(void)
 void __init __weak mem_encrypt_init(void) { }
 
 void __init __weak poking_init(void) { }
+void __init __weak wr_poking_init(void) { }
 
 bool initcall_debug;
 core_param(initcall_debug, initcall_debug, bool, 0644);
@@ -734,6 +735,7 @@ asmlinkage __visible void __init start_kernel(void)
 	delayacct_init();
 
 	poking_init();
+	wr_poking_init();
 	check_bugs();
 
 	acpi_subsystem_init();
