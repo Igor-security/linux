@@ -22,7 +22,9 @@
 #include <linux/thread_info.h>
 #include <linux/atomic.h>
 #include <linux/jump_label.h>
+#include <linux/prmem.h>
 #include <asm/sections.h>
+
 
 /*
  * Checks if a given pointer and length is contained by the current
@@ -284,6 +286,9 @@ void __check_object_size(const void *ptr, unsigned long n, bool to_user)
 
 	/* Check for object in kernel to avoid text exposure. */
 	check_kernel_text_object((const unsigned long)ptr, n, to_user);
+
+	/* Check if object is from a pmalloc chunk. */
+	check_pmalloc_object(ptr, n, to_user);
 }
 EXPORT_SYMBOL(__check_object_size);
 
