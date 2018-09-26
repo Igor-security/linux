@@ -9655,6 +9655,7 @@ M:	Igor Stoppa <igor.stoppa@gmail.com>
 L:	kernel-hardening@lists.openwall.com
 S:	Maintained
 F:	include/linux/prmem.h
+F:	include/linux/prmemextra.h
 F:	mm/prmem.c
 
 MEMORY MANAGEMENT
