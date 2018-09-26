@@ -221,6 +221,30 @@ struct pmalloc_pool {
 	uint8_t mode;
 };
 
+void __noreturn usercopy_abort(const char *name, const char *detail,
+			       bool to_user, unsigned long offset,
+			       unsigned long len);
+
+/**
+ * check_pmalloc_object() - helper for hardened usercopy
+ * @ptr: the beginning of the memory to check
+ * @n: the size of the memory to check
+ * @to_user: copy to userspace or from userspace
+ *
+ * If the check is ok, it will fall-through, otherwise it will abort.
+ * The function is inlined, to minimize the performance impact of the
+ * extra check that can end up on a hot path.
+ * Non-exhaustive micro benchmarking with QEMU x86_64 shows a reduction of
+ * the time spent in this fragment by 60%, when inlined.
+ */
+static inline
+void check_pmalloc_object(const void *ptr, unsigned long n, bool to_user)
+{
+	if (unlikely(__is_wr_after_init(ptr, n) || __is_wr_pool(ptr, n)))
+		usercopy_abort("pmalloc", "accessing pmalloc obj", to_user,
+			       (const unsigned long)ptr, n);
+}
+
 /*
  * The write rare functionality is fully implemented as __always_inline,
  * to prevent having an internal function call that is capable of modifying
