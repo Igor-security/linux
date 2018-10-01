@@ -17,6 +17,7 @@
 #include <linux/mm.h>
 #include <linux/bug.h>
 #include <linux/prmemextra.h>
+#include <linux/prlist.h>
 
 #ifdef pr_fmt
 #undef pr_fmt
@@ -193,6 +194,15 @@ static bool test_ptr(void)
 		reference == &referred_value;
 }
 
+static int *rcu_ptr __wr_after_init __attribute__((aligned(sizeof(void *))));
+static bool test_rcu_ptr(void)
+{
+	uintptr_t addr = wr_rcu_assign_pointer(rcu_ptr, &referred_value);
+
+	return  (addr == (uintptr_t)&referred_value) &&
+		referred_value == *(int *)addr;
+}
+
 static bool test_specialized_write_rare(void)
 {
 	if (WARN(!(test_char() && test_short() &&
@@ -200,7 +210,7 @@ static bool test_specialized_write_rare(void)
 		   test_uint() && test_long() && test_ulong() &&
 		   test_long() && test_ulong() &&
 		   test_longlong() && test_ulonglong() &&
-		   test_ptr()),
+		   test_ptr() && test_rcu_ptr()),
 		 "Specialized write rare test failed"))
 		return false;
 	pr_success("Specialized write rare");
