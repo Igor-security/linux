@@ -85,12 +85,12 @@ bool wr_memset(const void *dst, const int c, size_t n_bytes)
 	while (n_bytes) {
 		struct page *page;
 		void *base;
-		unsigned long offset;
+		uintptr_t offset;
 		size_t offset_complement;
 
 		local_irq_save(flags);
 		page = is_virt ? virt_to_page(d) : vmalloc_to_page(d);
-		offset = (unsigned long)d & ~PAGE_MASK;
+		offset = (uintptr_t)d & ~PAGE_MASK;
 		offset_complement = ((size_t)PAGE_SIZE) - offset;
 		size = min(((int)n_bytes), ((int)offset_complement));
 		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
@@ -130,12 +130,12 @@ bool wr_memcpy(const void *dst, const void *src, size_t n_bytes)
 	while (n_bytes) {
 		struct page *page;
 		void *base;
-		unsigned long offset;
+		uintptr_t offset;
 		size_t offset_complement;
 
 		local_irq_save(flags);
 		page = is_virt ? virt_to_page(d) : vmalloc_to_page(d);
-		offset = (unsigned long)d & ~PAGE_MASK;
+		offset = (uintptr_t)d & ~PAGE_MASK;
 		offset_complement = ((size_t)PAGE_SIZE) - offset;
 		size = min(((int)n_bytes), ((int)offset_complement));
 		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
@@ -153,6 +153,46 @@ err:
 	local_irq_restore(flags);
 	return false;
 }
+
+/*
+ * rcu_assign_pointer is a macro, which takes advantage of being able to
+ * take the address of the destination parameter "p", so that it can be
+ * passed to WRITE_ONCE(), which is called in one of the branches of
+ * rcu_assign_pointer() and also, being a macro, can rely on the
+ * preprocessor for taking the address of its parameter.
+ * For the sake of staying compatible with the API, also
+ * wr_rcu_assign_pointer() is a macro that accepts a pointer as parameter,
+ * instead of the address of said pointer.
+ * However it is simply a wrapper to __wr_rcu_ptr(), which receives the
+ * address of the pointer.
+ */
+static __always_inline
+uintptr_t __wr_rcu_ptr(const void *dst_p_p, const void *src_p)
+{
+	unsigned long flags;
+	struct page *page;
+	void *base;
+	uintptr_t offset;
+	bool is_virt = __is_wr_after_init(dst_p_p, sizeof(void *));
+
+	if (WARN(!(is_virt || likely(__is_wr_pool(dst_p_p, sizeof(void *)))),
+		 "Write rare on invalid memory range."))
+		return (uintptr_t)NULL;
+	local_irq_save(flags);
+	page = is_virt ? virt_to_page(dst_p_p) : vmalloc_to_page(dst_p_p);
+	offset = (uintptr_t)dst_p_p & ~PAGE_MASK;
+	base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
+	if (WARN(!base, "failed to remap write rare page")) {
+		local_irq_restore(flags);
+		return (uintptr_t)NULL;
+	}
+	rcu_assign_pointer((*(void **)(offset + (uintptr_t)base)), src_p);
+	vunmap(base);
+	local_irq_restore(flags);
+	return (uintptr_t)src_p;
+}
+
+#define wr_rcu_assign_pointer(p, v)	__wr_rcu_ptr(&p, v)
 
 #define __wr_simple(dst_ptr, src_ptr)					\
 	wr_memcpy(dst_ptr, src_ptr, sizeof(*(src_ptr)))
