@@ -21,7 +21,7 @@
 
 static struct pmalloc_pool *pool;
 
-static struct prlist_head test_prlist_head __wr_after_init =
+static union prlist_head test_prlist_head __wr_after_init =
 	PRLIST_HEAD_INIT(test_prlist_head.list);
 
 /* ---------------------- prlist test functions ---------------------- */
@@ -36,7 +36,7 @@ static bool test_init_prlist_head(void)
 	if (WARN(test_prlist_head.prev || test_prlist_head.next,
 		 "resetting of static prlist_head failed"))
 		return false;
-	INIT_STATIC_PRLIST_HEAD(&test_prlist_head);
+	INIT_PRLIST_HEAD(&test_prlist_head);
 	if (WARN(test_prlist_head.prev != &test_prlist_head ||
 		 test_prlist_head.next != &test_prlist_head,
 		 "initialization of static prlist_head failed"))
@@ -47,7 +47,7 @@ static bool test_init_prlist_head(void)
 
 struct prlist_data {
 	int d_int;
-	struct prlist_head node;
+	union prlist_head node;
 	unsigned long long d_ulonglong;
 };
 
@@ -103,7 +103,7 @@ static bool test_teardown_prlist(void)
 	short i;
 
 	for (i = 0; !list_empty(&test_prlist_head.list); i++)
-		prlist_del_entry(test_prlist_head.next);
+		prlist_del(test_prlist_head.next);
 	if (WARN(i != LIST_NODES * 2 - 1, "teardown prlist test failed"))
 		return false;
 	pmalloc_destroy_pool(pool);
@@ -123,7 +123,7 @@ static bool test_prlist(void)
 }
 
 /* ---------------------- prhlist test functions ---------------------- */
-static struct prhlist_head test_prhlist_head __wr_after_init =
+static union prhlist_head test_prhlist_head __wr_after_init =
 	PRHLIST_HEAD_INIT;
 
 static bool test_init_prhlist_head(void)
@@ -135,7 +135,7 @@ static bool test_init_prhlist_head(void)
 	if (WARN(!test_prhlist_head.first,
 		 "resetting of static prhlist_head failed"))
 		return false;
-	INIT_STATIC_PRHLIST_HEAD(&test_prhlist_head);
+	INIT_PRHLIST_HEAD(&test_prhlist_head);
 	if (WARN(!test_prlist_head.prev,
 		 "initialization of static prhlist_head failed"))
 		return false;
@@ -145,7 +145,7 @@ static bool test_init_prhlist_head(void)
 
 struct prhlist_data {
 	int d_int;
-	struct prhlist_node node;
+	union prhlist_node node;
 	unsigned long long d_ulonglong;
 };
 
@@ -153,7 +153,7 @@ static bool test_build_prhlist(void)
 {
 	short i;
 	struct prhlist_data *data;
-	struct prhlist_node *anchor;
+	union prhlist_node *anchor;
 
 	pool = prhlist_create_pool();
 	if (WARN(!pool, "could not create pool"))
@@ -206,7 +206,7 @@ out:
 
 static bool test_teardown_prhlist(void)
 {
-	struct prhlist_node **pnode;
+	union prhlist_node **pnode;
 	bool retval = false;
 
 	for (pnode = &test_prhlist_head.first->next; *pnode;) {
