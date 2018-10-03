@@ -29,6 +29,7 @@
 #include <linux/ima.h>
 #include <linux/iversion.h>
 #include <linux/fs.h>
+#include <linux/prlist.h>
 
 #include "ima.h"
 
@@ -535,6 +536,8 @@ int ima_load_data(enum kernel_load_data_id id)
 	}
 	return 0;
 }
+
+struct pmalloc_pool ima_pool;
 
 static int __init init_ima(void)
 {
