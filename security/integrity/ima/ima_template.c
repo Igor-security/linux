@@ -22,14 +22,15 @@
 enum header_fields { HDR_PCR, HDR_DIGEST, HDR_TEMPLATE_NAME,
 		     HDR_TEMPLATE_DATA, HDR__LAST };
 
-static struct ima_template_desc builtin_templates[] = {
+static struct ima_template_desc builtin_templates[] __wr_after_init = {
 	{.name = IMA_TEMPLATE_IMA_NAME, .fmt = IMA_TEMPLATE_IMA_FMT},
 	{.name = "ima-ng", .fmt = "d-ng|n-ng"},
 	{.name = "ima-sig", .fmt = "d-ng|n-ng|sig"},
 	{.name = "", .fmt = ""},	/* placeholder for a custom format */
 };
 
-static LIST_HEAD(defined_templates);
+static PRLIST_HEAD(defined_templates);
+
 static DEFINE_SPINLOCK(template_list);
 
 static const struct ima_template_field supported_fields[] = {
@@ -114,7 +115,8 @@ static struct ima_template_desc *lookup_template_desc(const char *name)
 	int found = 0;
 
 	rcu_read_lock();
-	list_for_each_entry_rcu(template_desc, &defined_templates, list) {
+	list_for_each_entry_rcu(template_desc, &defined_templates.list,
+				list.list) {
 		if ((strcmp(template_desc->name, name) == 0) ||
 		    (strcmp(template_desc->fmt, name) == 0)) {
 			found = 1;
@@ -208,12 +210,12 @@ void ima_init_template_list(void)
 {
 	int i;
 
-	if (!list_empty(&defined_templates))
+	if (!list_empty(&defined_templates.list))
 		return;
 
 	spin_lock(&template_list);
 	for (i = 0; i < ARRAY_SIZE(builtin_templates); i++) {
-		list_add_tail_rcu(&builtin_templates[i].list,
+		prlist_add_tail_rcu(&builtin_templates[i].list,
 				  &defined_templates);
 	}
 	spin_unlock(&template_list);
@@ -267,7 +269,7 @@ static struct ima_template_desc *restore_template_fmt(char *template_name)
 		goto out;
 
 	spin_lock(&template_list);
-	list_add_tail_rcu(&template_desc->list, &defined_templates);
+	prlist_add_tail_rcu(&template_desc->list, &defined_templates);
 	spin_unlock(&template_list);
 out:
 	return template_desc;
