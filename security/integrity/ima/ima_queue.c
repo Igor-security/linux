@@ -24,11 +24,14 @@
 #include <linux/module.h>
 #include <linux/rculist.h>
 #include <linux/slab.h>
+#include <linux/prmemextra.h>
+#include <linux/prlist.h>
+#include <linux/pratomic-long.h>
 #include "ima.h"
 
 #define AUDIT_CAUSE_LEN_MAX 32
 
-LIST_HEAD(ima_measurements);	/* list of all measurements */
+PRLIST_HEAD(ima_measurements);	/* list of all measurements */
 #ifdef CONFIG_IMA_KEXEC
 static unsigned long binary_runtime_size;
 #else
@@ -36,9 +39,9 @@ static unsigned long binary_runtime_size = ULONG_MAX;
 #endif
 
 /* key: inode (before secure-hashing a file) */
-struct ima_h_table ima_htable = {
-	.len = ATOMIC_LONG_INIT(0),
-	.violations = ATOMIC_LONG_INIT(0),
+struct ima_h_table ima_htable __wr_after_init = {
+	.len = PRATOMIC_LONG_INIT(0),
+	.violations = PRATOMIC_LONG_INIT(0),
 	.queue[0 ... IMA_MEASURE_HTABLE_SIZE - 1] = HLIST_HEAD_INIT
 };
 
@@ -58,7 +61,7 @@ static struct ima_queue_entry *ima_lookup_digest_entry(u8 *digest_value,
 
 	key = ima_hash_key(digest_value);
 	rcu_read_lock();
-	hlist_for_each_entry_rcu(qe, &ima_htable.queue[key], hnext) {
+	hlist_for_each_entry_rcu(qe, &ima_htable.queue[key], hnext.node) {
 		rc = memcmp(qe->entry->digest, digest_value, TPM_DIGEST_SIZE);
 		if ((rc == 0) && (qe->entry->pcr == pcr)) {
 			ret = qe;
@@ -87,6 +90,8 @@ static int get_binary_runtime_size(struct ima_template_entry *entry)
 	return size;
 }
 
+extern struct pmalloc_pool ima_pool;
+
 /* ima_add_template_entry helper function:
  * - Add template entry to the measurement list and hash table, for
  *   all entries except those carried across kexec.
@@ -99,20 +104,21 @@ static int ima_add_digest_entry(struct ima_template_entry *entry,
 	struct ima_queue_entry *qe;
 	unsigned int key;
 
-	qe = kmalloc(sizeof(*qe), GFP_KERNEL);
+	qe = pmalloc(&ima_pool, sizeof(*qe));
 	if (qe == NULL) {
 		pr_err("OUT OF MEMORY ERROR creating queue entry\n");
 		return -ENOMEM;
 	}
-	qe->entry = entry;
+	wr_ptr(&qe->entry, entry);
+	INIT_PRLIST_HEAD(&qe->later);
+	prlist_add_tail_rcu(&qe->later, &ima_measurements);
 
-	INIT_LIST_HEAD(&qe->later);
-	list_add_tail_rcu(&qe->later, &ima_measurements);
 
-	atomic_long_inc(&ima_htable.len);
+	pratomic_long_inc(&ima_htable.len);
+
 	if (update_htable) {
 		key = ima_hash_key(entry->digest);
-		hlist_add_head_rcu(&qe->hnext, &ima_htable.queue[key]);
+		prhlist_add_head_rcu(&qe->hnext, &ima_htable.queue[key]);
 	}
 
 	if (binary_runtime_size != ULONG_MAX) {

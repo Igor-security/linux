@@ -24,6 +24,8 @@
 #include <linux/hash.h>
 #include <linux/tpm.h>
 #include <linux/audit.h>
+#include <linux/prlist.h>
+#include <linux/pratomic-long.h>
 #include <crypto/hash_info.h>
 
 #include "../integrity.h"
@@ -84,7 +86,7 @@ struct ima_template_field {
 
 /* IMA template descriptor definition */
 struct ima_template_desc {
-	struct list_head list;
+	union prlist_head list;
 	char *name;
 	char *fmt;
 	int num_fields;
@@ -100,11 +102,13 @@ struct ima_template_entry {
 };
 
 struct ima_queue_entry {
-	struct hlist_node hnext;	/* place in hash collision list */
-	struct list_head later;		/* place in ima_measurements list */
+	union prhlist_node hnext;	/* place in hash collision list */
+	union prlist_head later;	/* place in ima_measurements list */
 	struct ima_template_entry *entry;
 };
-extern struct list_head ima_measurements;	/* list of all measurements */
+
+/* list of all measurements */
+extern union prlist_head ima_measurements __wr_after_init;
 
 /* Some details preceding the binary serialized measurement list */
 struct ima_kexec_hdr {
@@ -160,9 +164,9 @@ void ima_init_template_list(void);
 extern spinlock_t ima_queue_lock;
 
 struct ima_h_table {
-	atomic_long_t len;	/* number of stored measurements in the list */
-	atomic_long_t violations;
-	struct hlist_head queue[IMA_MEASURE_HTABLE_SIZE];
+	struct pratomic_long_t len;	/* # of measurements in the list */
+	struct pratomic_long_t violations;
+	union prhlist_head queue[IMA_MEASURE_HTABLE_SIZE];
 };
 extern struct ima_h_table ima_htable;
 
