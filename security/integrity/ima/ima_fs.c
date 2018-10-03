@@ -57,7 +57,8 @@ static ssize_t ima_show_htable_violations(struct file *filp,
 					  char __user *buf,
 					  size_t count, loff_t *ppos)
 {
-	return ima_show_htable_value(buf, count, ppos, &ima_htable.violations);
+	return ima_show_htable_value(buf, count, ppos,
+				     &ima_htable.violations.l);
 }
 
 static const struct file_operations ima_htable_violations_ops = {
@@ -69,8 +70,7 @@ static ssize_t ima_show_measurements_count(struct file *filp,
 					   char __user *buf,
 					   size_t count, loff_t *ppos)
 {
-	return ima_show_htable_value(buf, count, ppos, &ima_htable.len);
-
+	return ima_show_htable_value(buf, count, ppos, &ima_htable.len.l);
 }
 
 static const struct file_operations ima_measurements_count_ops = {
@@ -86,7 +86,7 @@ static void *ima_measurements_start(struct seq_file *m, loff_t *pos)
 
 	/* we need a lock since pos could point beyond last element */
 	rcu_read_lock();
-	list_for_each_entry_rcu(qe, &ima_measurements, later) {
+	list_for_each_entry_rcu(qe, &ima_measurements.list, later.list) {
 		if (!l--) {
 			rcu_read_unlock();
 			return qe;
@@ -304,7 +304,7 @@ static ssize_t ima_read_policy(char *path)
 		size -= rc;
 	}
 
-	vfree(data);
+//	vfree(data);
 	if (rc < 0)
 		return rc;
 	else if (size)
@@ -351,7 +351,7 @@ static ssize_t ima_write_policy(struct file *file, const char __user *buf,
 	}
 	mutex_unlock(&ima_write_mutex);
 out_free:
-	kfree(data);
+//	kfree(data);
 out:
 	if (result < 0)
 		valid_policy = 0;

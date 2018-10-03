@@ -15,7 +15,11 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/printk.h>
+#include <linux/prmemextra.h>
 #include "ima_template_lib.h"
+
+extern struct pmalloc_pool ima_pool;
 
 static bool ima_template_hash_algo_allowed(u8 algo)
 {
@@ -42,11 +46,11 @@ static int ima_write_template_field_data(const void *data, const u32 datalen,
 	if (datafmt == DATA_FMT_STRING)
 		buflen = datalen + 1;
 
-	buf = kzalloc(buflen, GFP_KERNEL);
+	buf = pzalloc(&ima_pool, buflen);
 	if (!buf)
 		return -ENOMEM;
 
-	memcpy(buf, data, datalen);
+	wr_memcpy(buf, data, datalen);
 
 	/*
 	 * Replace all space characters with underscore for event names and
@@ -58,11 +62,11 @@ static int ima_write_template_field_data(const void *data, const u32 datalen,
 	if (datafmt == DATA_FMT_STRING) {
 		for (buf_ptr = buf; buf_ptr - buf < datalen; buf_ptr++)
 			if (*buf_ptr == ' ')
-				*buf_ptr = '_';
+				wr_char(buf_ptr, '_');
 	}
 
-	field_data->data = buf;
-	field_data->len = buflen;
+	wr_ptr(&field_data->data, buf);
+	wr_memcpy(&field_data->len, &buflen, sizeof(buflen));
 	return 0;
 }
 

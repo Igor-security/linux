@@ -19,9 +19,12 @@
 #include <linux/xattr.h>
 #include <linux/evm.h>
 #include <linux/iversion.h>
+#include <linux/prmemextra.h>
+#include <linux/pratomic-long.h>
 
 #include "ima.h"
 
+extern struct pmalloc_pool ima_pool;
 /*
  * ima_free_template_entry - free an existing template entry
  */
@@ -29,10 +32,10 @@ void ima_free_template_entry(struct ima_template_entry *entry)
 {
 	int i;
 
-	for (i = 0; i < entry->template_desc->num_fields; i++)
-		kfree(entry->template_data[i].data);
+//	for (i = 0; i < entry->template_desc->num_fields; i++)
+//		kfree(entry->template_data[i].data);
 
-	kfree(entry);
+//	kfree(entry);
 }
 
 /*
@@ -44,12 +47,13 @@ int ima_alloc_init_template(struct ima_event_data *event_data,
 	struct ima_template_desc *template_desc = ima_template_desc_current();
 	int i, result = 0;
 
-	*entry = kzalloc(sizeof(**entry) + template_desc->num_fields *
-			 sizeof(struct ima_field_data), GFP_NOFS);
+	*entry = pzalloc(&ima_pool,
+			 sizeof(**entry) + template_desc->num_fields *
+			 sizeof(struct ima_field_data));
 	if (!*entry)
 		return -ENOMEM;
 
-	(*entry)->template_desc = template_desc;
+	wr_ptr(&((*entry)->template_desc), template_desc);
 	for (i = 0; i < template_desc->num_fields; i++) {
 		const struct ima_template_field *field =
 			template_desc->fields[i];
@@ -60,9 +64,10 @@ int ima_alloc_init_template(struct ima_event_data *event_data,
 		if (result != 0)
 			goto out;
 
-		len = (*entry)->template_data[i].len;
-		(*entry)->template_data_len += sizeof(len);
-		(*entry)->template_data_len += len;
+		len = (*entry)->template_data_len + sizeof(len) +
+			(*entry)->template_data[i].len;
+		wr_memcpy(&(*entry)->template_data_len, &len,
+			  sizeof(len));
 	}
 	return 0;
 out:
@@ -114,9 +119,9 @@ int ima_store_template(struct ima_template_entry *entry,
 					    audit_cause, result, 0);
 			return result;
 		}
-		memcpy(entry->digest, hash.hdr.digest, hash.hdr.length);
+		wr_memcpy(entry->digest, hash.hdr.digest, hash.hdr.length);
 	}
-	entry->pcr = pcr;
+	wr_int(&entry->pcr, pcr);
 	result = ima_add_template_entry(entry, violation, op, inode, filename);
 	return result;
 }
@@ -140,7 +145,7 @@ void ima_add_violation(struct file *file, const unsigned char *filename,
 	int result;
 
 	/* can overflow, only indicator */
-	atomic_long_inc(&ima_htable.violations);
+	pratomic_long_inc(&ima_htable.violations);
 
 	result = ima_alloc_init_template(&event_data, &entry);
 	if (result < 0) {
