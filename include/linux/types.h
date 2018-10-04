@@ -183,16 +183,28 @@ typedef struct {
 } atomic64_t;
 #endif
 
+#ifdef CONFIG_PRMEM
+struct list_head {
+	struct list_head *next __aligned(sizeof(void *));
+	struct list_head *prev __aligned(sizeof(void *));
+} __aligned(sizeof(void *));
+
+struct hlist_node {
+	struct hlist_node *next __aligned(sizeof(void *));
+	struct hlist_node **pprev __aligned(sizeof(void *));
+} __aligned(sizeof(void *));
+#else
 struct list_head {
 	struct list_head *next, *prev;
 };
 
-struct hlist_head {
-	struct hlist_node *first;
-};
-
 struct hlist_node {
 	struct hlist_node *next, **pprev;
+};
+#endif
+
+struct hlist_head {
+	struct hlist_node *first;
 };
 
 struct ustat {
