@@ -187,12 +187,12 @@ typedef struct {
 struct list_head {
 	struct list_head *next __aligned(sizeof(void *));
 	struct list_head *prev __aligned(sizeof(void *));
-} __aligned(sizeof(void *));
+} __no_randomize_layout __aligned(sizeof(void *));
 
 struct hlist_node {
 	struct hlist_node *next __aligned(sizeof(void *));
 	struct hlist_node **pprev __aligned(sizeof(void *));
-} __aligned(sizeof(void *));
+} __no_randomize_layout __aligned(sizeof(void *));
 #else
 struct list_head {
 	struct list_head *next, *prev;
