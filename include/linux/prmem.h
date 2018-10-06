@@ -31,6 +31,9 @@
 
 /* ============================ Write Rare ============================ */
 
+extern const char WR_ERR_RANGE_MSG[];
+extern const char WR_ERR_PAGE_MSG[];
+
 /*
  * The following two variables are statically allocated by the linker
  * script at the the boundaries of the memory region (rounded up to
@@ -74,30 +77,33 @@ bool wr_memset(const void *dst, const int c, size_t n_bytes)
 {
 	size_t size;
 	unsigned long flags;
-	const void *d = dst;
+	uintptr_t d = (uintptr_t)dst;
 	bool is_virt = __is_wr_after_init(dst, n_bytes);
 
 	if (WARN(!(is_virt || likely(__is_wr_pool(dst, n_bytes))),
-		 "Write rare on invalid memory range."))
+		 WR_ERR_RANGE_MSG))
 		return false;
 	while (n_bytes) {
 		struct page *page;
-		void *base;
+		uintptr_t base;
 		uintptr_t offset;
-		size_t offset_complement;
+		uintptr_t offset_complement;
 
 		local_irq_save(flags);
-		page = is_virt ? virt_to_page(d) : vmalloc_to_page(d);
-		offset = (uintptr_t)d & ~PAGE_MASK;
-		offset_complement = ((size_t)PAGE_SIZE) - offset;
-		size = min(((int)n_bytes), ((int)offset_complement));
-		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
-		if (WARN(!base, "failed to remap write rare page")) {
+		if (is_virt)
+			page = virt_to_page(d);
+		else
+			page = vmalloc_to_page((void *)d);
+		offset = d & ~PAGE_MASK;
+		offset_complement = PAGE_SIZE - offset;
+		size = min(n_bytes, offset_complement);
+		base = (uintptr_t)vmap(&page, 1, VM_MAP, PAGE_KERNEL);
+		if (WARN(!base, WR_ERR_PAGE_MSG)) {
 			local_irq_restore(flags);
 			return false;
 		}
-		memset(base + offset, c, size);
-		vunmap(base);
+		memset((void *)(base + offset), c, size);
+		vunmap((void *)base);
 		d += size;
 		n_bytes -= size;
 		local_irq_restore(flags);
@@ -118,31 +124,34 @@ bool wr_memcpy(const void *dst, const void *src, size_t n_bytes)
 {
 	size_t size;
 	unsigned long flags;
-	const void *d = dst;
-	const void *s = src;
+	uintptr_t d = (uintptr_t)dst;
+	uintptr_t s = (uintptr_t)src;
 	bool is_virt = __is_wr_after_init(dst, n_bytes);
 
 	if (WARN(!(is_virt || likely(__is_wr_pool(dst, n_bytes))),
-		 "Write rare on invalid memory range."))
+		 WR_ERR_RANGE_MSG))
 		return false;
 	while (n_bytes) {
 		struct page *page;
-		void *base;
+		uintptr_t base;
 		uintptr_t offset;
-		size_t offset_complement;
+		uintptr_t offset_complement;
 
 		local_irq_save(flags);
-		page = is_virt ? virt_to_page(d) : vmalloc_to_page(d);
-		offset = (uintptr_t)d & ~PAGE_MASK;
-		offset_complement = ((size_t)PAGE_SIZE) - offset;
-		size = min(((int)n_bytes), ((int)offset_complement));
-		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
-		if (WARN(!base, "failed to remap write rare page")) {
+		if (is_virt)
+			page = virt_to_page(d);
+		else
+			page = vmalloc_to_page((void *)d);
+		offset = d & ~PAGE_MASK;
+		offset_complement = PAGE_SIZE - offset;
+		size = (size_t)min(n_bytes, offset_complement);
+		base = (uintptr_t)vmap(&page, 1, VM_MAP, PAGE_KERNEL);
+		if (WARN(!base, WR_ERR_PAGE_MSG)) {
 			local_irq_restore(flags);
 			return false;
 		}
-		__write_once_size(base + offset, (void *)s, size);
-		vunmap(base);
+		__write_once_size((void *)(base + offset), (void *)s, size);
+		vunmap((void *)base);
 		d += size;
 		s += size;
 		n_bytes -= size;
@@ -170,16 +179,17 @@ uintptr_t __wr_rcu_ptr(const void *dst_p_p, const void *src_p)
 	struct page *page;
 	void *base;
 	uintptr_t offset;
-	bool is_virt = __is_wr_after_init(dst_p_p, sizeof(void *));
+	const size_t size = sizeof(void *);
+	bool is_virt = __is_wr_after_init(dst_p_p, size);
 
-	if (WARN(!(is_virt || likely(__is_wr_pool(dst_p_p, sizeof(void *)))),
-		 "Write rare on invalid memory range."))
+	if (WARN(!(is_virt || likely(__is_wr_pool(dst_p_p, size))),
+		 WR_ERR_RANGE_MSG))
 		return (uintptr_t)NULL;
 	local_irq_save(flags);
 	page = is_virt ? virt_to_page(dst_p_p) : vmalloc_to_page(dst_p_p);
 	offset = (uintptr_t)dst_p_p & ~PAGE_MASK;
 	base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
-	if (WARN(!base, "failed to remap write rare page")) {
+	if (WARN(!base, WR_ERR_PAGE_MSG)) {
 		local_irq_restore(flags);
 		return (uintptr_t)NULL;
 	}

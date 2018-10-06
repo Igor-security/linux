@@ -22,6 +22,9 @@
 
 #include <linux/prmem.h>
 
+const char WR_ERR_RANGE_MSG[] = "Write rare on invalid memory range.";
+const char WR_ERR_PAGE_MSG[] = "Failed to remap write rare page.";
+
 static LIST_HEAD(pools_list);
 static DEFINE_MUTEX(pools_mutex);
 
