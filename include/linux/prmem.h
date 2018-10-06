@@ -14,6 +14,7 @@
 
 #include <linux/set_memory.h>
 #include <linux/mm.h>
+#include <linux/vmalloc.h>
 #include <linux/string.h>
 #include <linux/slab.h>
 #include <linux/mutex.h>
@@ -22,6 +23,9 @@
 #include <linux/set_memory.h>
 
 /* ============================ Write Rare ============================ */
+
+extern const char WR_ERR_RANGE_MSG[];
+extern const char WR_ERR_PAGE_MSG[];
 
 /*
  * The following two variables are statically allocated by the linker
@@ -54,29 +58,28 @@ bool wr_memset(const void *dst, const int c, size_t n_bytes)
 {
 	size_t size;
 	unsigned long flags;
-	const void *d = dst;
+	uintptr_t d = (uintptr_t)dst;
 
-	if (WARN(!__is_wr_after_init(dst, n_bytes),
-		 "Write rare on invalid memory range."))
+	if (WARN(!__is_wr_after_init(dst, n_bytes), WR_ERR_RANGE_MSG))
 		return false;
 	while (n_bytes) {
 		struct page *page;
-		void *base;
+		uintptr_t base;
 		uintptr_t offset;
-		size_t offset_complement;
+		uintptr_t offset_complement;
 
 		local_irq_save(flags);
 		page = virt_to_page(d);
-		offset = (uintptr_t)d & ~PAGE_MASK;
-		offset_complement = ((size_t)PAGE_SIZE) - offset;
-		size = min(((int)n_bytes), ((int)offset_complement));
-		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
-		if (WARN(!base, "failed to remap write rare page")) {
+		offset = d & ~PAGE_MASK;
+		offset_complement = PAGE_SIZE - offset;
+		size = min(n_bytes, offset_complement);
+		base = (uintptr_t)vmap(&page, 1, VM_MAP, PAGE_KERNEL);
+		if (WARN(!base, WR_ERR_PAGE_MSG)) {
 			local_irq_restore(flags);
 			return false;
 		}
-		memset(base + offset, c, size);
-		vunmap(base);
+		memset((void *)(base + offset), c, size);
+		vunmap((void *)base);
 		d += size;
 		n_bytes -= size;
 		local_irq_restore(flags);
@@ -97,30 +100,29 @@ bool wr_memcpy(const void *dst, const void *src, size_t n_bytes)
 {
 	size_t size;
 	unsigned long flags;
-	const void *d = dst;
-	const void *s = src;
+	uintptr_t d = (uintptr_t)dst;
+	uintptr_t s = (uintptr_t)src;
 
-	if (WARN(!__is_wr_after_init(dst, n_bytes),
-		 "Write rare on invalid memory range."))
+	if (WARN(!__is_wr_after_init(dst, n_bytes), WR_ERR_RANGE_MSG))
 		return false;
 	while (n_bytes) {
 		struct page *page;
-		void *base;
+		uintptr_t base;
 		uintptr_t offset;
-		size_t offset_complement;
+		uintptr_t offset_complement;
 
 		local_irq_save(flags);
 		page = virt_to_page(d);
-		offset = (uintptr_t)d & ~PAGE_MASK;
-		offset_complement = ((size_t)PAGE_SIZE) - offset;
-		size = min(((int)n_bytes), ((int)offset_complement));
-		base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
-		if (WARN(!base, "failed to remap write rare page")) {
+		offset = d & ~PAGE_MASK;
+		offset_complement = PAGE_SIZE - offset;
+		size = (size_t)min(n_bytes, offset_complement);
+		base = (uintptr_t)vmap(&page, 1, VM_MAP, PAGE_KERNEL);
+		if (WARN(!base, WR_ERR_PAGE_MSG)) {
 			local_irq_restore(flags);
 			return false;
 		}
-		__write_once_size(base + offset, (void *)s, size);
-		vunmap(base);
+		__write_once_size((void *)(base + offset), (void *)s, size);
+		vunmap((void *)base);
 		d += size;
 		s += size;
 		n_bytes -= size;
@@ -148,15 +150,15 @@ uintptr_t __wr_rcu_ptr(const void *dst_p_p, const void *src_p)
 	struct page *page;
 	void *base;
 	uintptr_t offset;
+	const size_t size = sizeof(void *);
 
-	if (WARN(!__is_wr_after_init(dst_p_p, sizeof(void *)),
-		 "Write rare on invalid memory range."))
+	if (WARN(!__is_wr_after_init(dst_p_p, size), WR_ERR_RANGE_MSG))
 		return (uintptr_t)NULL;
 	local_irq_save(flags);
 	page = virt_to_page(dst_p_p);
 	offset = (uintptr_t)dst_p_p & ~PAGE_MASK;
 	base = vmap(&page, 1, VM_MAP, PAGE_KERNEL);
-	if (WARN(!base, "failed to remap write rare page")) {
+	if (WARN(!base, WR_ERR_PAGE_MSG)) {
 		local_irq_restore(flags);
 		return (uintptr_t)NULL;
 	}
@@ -208,5 +210,4 @@ bool wr_ptr(const void *dst, const void *val)
 {
 	return wr_memcpy(dst, &val, sizeof(val));
 }
-
 #endif
