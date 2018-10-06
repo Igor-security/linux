@@ -9451,6 +9451,7 @@ F:	mm/test_write_rare.c
 F:	mm/test_pmalloc.c
 F:	include/linux/prlist.h
 F:	lib/test_prlist.c
+F:	include/linux/pratomic-long.h
 
 MEMORY MANAGEMENT
 L:	linux-mm@kvack.org
