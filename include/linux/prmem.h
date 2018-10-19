@@ -71,7 +71,7 @@ static __always_inline bool __is_wr_pool(const void *ptr, size_t size)
  * wr_memset() - sets n bytes of the destination to the c value
  * @dst: beginning of the memory to write to
  * @c: byte to replicate
- * @size: amount of bytes to copy
+ * @n_bytes: amount of bytes to copy
  *
  * Returns true on success, false otherwise.
  */
