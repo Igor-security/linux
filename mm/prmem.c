@@ -80,8 +80,8 @@ bool space_needed(struct pmalloc_pool *pool, size_t size)
  * @mode: is the data RO or RareWrite and should be provided already in
  *        protected mode.
  *        The value is one of:
- *           PMALLOC_MODE_RO, PMALLOC_MODE_WR, PMALLOC_MODE_AUTO_RO
- *                PMALLOC_MODE_AUTO_WR, PMALLOC_MODE_START_WR
+ *        PMALLOC_MODE_RO, PMALLOC_MODE_WR, PMALLOC_MODE_AUTO_RO
+ *        PMALLOC_MODE_AUTO_WR, PMALLOC_MODE_START_WR
  *
  * Initializes an empty memory pool, for allocation of protectable
  * memory. Memory will be allocated upon request (through pmalloc).
