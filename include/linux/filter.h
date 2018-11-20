@@ -704,7 +704,13 @@ static inline void bpf_prog_unlock_ro(struct bpf_prog *fp)
 
 static inline void bpf_jit_binary_lock_ro(struct bpf_binary_header *hdr)
 {
+	/*
+	 * Perform mapping changes in two stages to avoid opening a time-window
+	 * in which a PTE is cached in any TLB as writable, but marked as
+	 * executable in the memory-resident mappings (e.g., page-tables).
+	 */
 	set_memory_ro((unsigned long)hdr, hdr->pages);
+	set_memory_x((unsigned long)hdr, hdr->pages);
 }
 
 static inline void bpf_jit_binary_unlock_ro(struct bpf_binary_header *hdr)
