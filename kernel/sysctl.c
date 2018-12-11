@@ -1124,7 +1124,7 @@ static struct ctl_table kern_table[] = {
 		.procname	= "poweroff_cmd",
 		.data		= &poweroff_cmd,
 		.maxlen		= POWEROFF_CMD_PATH_LEN,
-		.mode		= 0644,
+		.mode		= 0444,
 		.proc_handler	= proc_dostring,
 	},
 #ifdef CONFIG_KEYS
