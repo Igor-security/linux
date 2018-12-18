@@ -102,3 +102,11 @@ config DEBUG_PRMEM_TEST
     help
       Tries to verify that the protection for statically allocated memory
       works correctly and that the memory is effectively protected.
+
+config DEBUG_PRMEM
+    bool "Verify each write rare operation."
+    depends on PRMEM
+    default n
+    help
+      After any write rare operation, compares the data written with the
+      value provided by the caller.
