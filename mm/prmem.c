@@ -61,6 +61,9 @@ void *wr_memcpy(void *p, const void *q, __kernel_size_t size)
 	__wr_enable(&wr_state);
 	__wr_memcpy(wr_poking_addr, q, size);
 	__wr_disable(&wr_state);
+#ifdef CONFIG_DEBUG_PRMEM
+	VM_WARN_ONCE(memcmp(p, q, size), "Failed %s()", __func__);
+#endif
 	local_irq_enable();
 	return p;
 }
@@ -92,6 +95,9 @@ void *wr_memset(void *p, int c, __kernel_size_t len)
 	__wr_enable(&wr_state);
 	__wr_memset(wr_poking_addr, c, len);
 	__wr_disable(&wr_state);
+#ifdef CONFIG_DEBUG_PRMEM
+	VM_WARN_ONCE(memtst(p, c, len), "Failed %s()", __func__);
+#endif
 	local_irq_enable();
 	return p;
 }
