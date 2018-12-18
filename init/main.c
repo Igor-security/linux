@@ -718,6 +718,7 @@ asmlinkage __visible void __init start_kernel(void)
 	cred_init();
 	fork_init();
 	proc_caches_init();
+	wr_poking_init(); /* proc_caches_init() invokes mmap_init() */
 	uts_ns_init();
 	buffer_init();
 	key_init();
@@ -735,7 +736,6 @@ asmlinkage __visible void __init start_kernel(void)
 	delayacct_init();
 
 	poking_init();
-	wr_poking_init();
 	check_bugs();
 
 	acpi_subsystem_init();
