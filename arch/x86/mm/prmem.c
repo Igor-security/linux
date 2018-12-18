@@ -58,7 +58,14 @@ void *__wr_op(unsigned long dst, unsigned long src, __kernel_size_t len,
 		copy_to_user((void __user *)wr_poking_addr, (void *)src, len);
 	else if (op == WR_MEMSET)
 		memset_user((void __user *)wr_poking_addr, (u8)src, len);
-
+#ifdef CONFIG_DEBUG_PRMEM
+	if (op == WR_MEMCPY)
+		VM_WARN_ONCE(memcmp((void *)dst, (void *)src, len),
+			     "Failed wr_memcpy()");
+	else if (op == WR_MEMSET)
+		VM_WARN_ONCE(memtst((void *)dst, (u8)src, len),
+			     "Failed wr_memset()");
+#endif
 	unuse_temporary_mm(prev);
 	local_irq_enable();
 	return (void *)dst;
