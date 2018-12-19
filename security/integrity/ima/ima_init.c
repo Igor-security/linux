@@ -21,6 +21,7 @@
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
 #include <linux/err.h>
+#include <linux/prmem.h>
 
 #include "ima.h"
 
@@ -98,9 +99,9 @@ void __init ima_load_x509(void)
 {
 	int unset_flags = ima_policy_flag & IMA_APPRAISE;
 
-	ima_policy_flag &= ~unset_flags;
+	wr_assign(ima_policy_flag, ima_policy_flag & ~unset_flags);
 	integrity_load_x509(INTEGRITY_KEYRING_IMA, CONFIG_IMA_X509_PATH);
-	ima_policy_flag |= unset_flags;
+	wr_assign(ima_policy_flag, ima_policy_flag | unset_flags);
 }
 #endif
 
