@@ -10,13 +10,12 @@
 #include <linux/string.h>
 #include <linux/compiler.h>
 #include <linux/slab.h>
-#include <linux/mmu_context.h>
 #include <linux/rcupdate.h>
 #include <linux/prmem.h>
 
-static __ro_after_init bool wr_ready;
-static __ro_after_init struct mm_struct *wr_poking_mm;
-static __ro_after_init unsigned long wr_poking_base;
+extern __ro_after_init bool wr_ready;
+__ro_after_init struct mm_struct *wr_poking_mm;
+__ro_after_init unsigned long wr_poking_base;
 
 /*
  * The following two variables are statically allocated by the linker
@@ -26,71 +25,16 @@ static __ro_after_init unsigned long wr_poking_base;
 extern long __start_wr_after_init;
 extern long __end_wr_after_init;
 
-static inline bool is_wr_after_init(unsigned long ptr, __kernel_size_t size)
-{
-	unsigned long start = (unsigned long)&__start_wr_after_init;
-	unsigned long end = (unsigned long)&__end_wr_after_init;
-	unsigned long low = ptr;
-	unsigned long high = ptr + size;
-
-	return likely(start <= low && low <= high && high <= end);
-}
-
-void *__wr_op(unsigned long dst, unsigned long src, __kernel_size_t len,
-	      enum wr_op_type op)
-{
-	temporary_mm_state_t prev;
-	unsigned long wr_poking_addr;
-
-	/* Confirm that the writable mapping exists. */
-	if (WARN_ONCE(!wr_ready, "No writable mapping available"))
-		return (void *)dst;
-
-	if (WARN_ONCE(op >= WR_OPS_NUMBER, "Invalid WR operation.") ||
-	    WARN_ONCE(!is_wr_after_init(dst, len), "Invalid WR range."))
-		return (void *)dst;
-
-	wr_poking_addr = wr_poking_base + dst;
-	local_irq_disable();
-	prev = use_temporary_mm(wr_poking_mm);
-
-	if (op == WR_MEMCPY)
-		copy_to_user((void __user *)wr_poking_addr, (void *)src, len);
-	else if (op == WR_MEMSET)
-		memset_user((void __user *)wr_poking_addr, (u8)src, len);
-#ifdef CONFIG_DEBUG_PRMEM
-	if (op == WR_MEMCPY)
-		VM_WARN_ONCE(memcmp((void *)dst, (void *)src, len),
-			     "Failed wr_memcpy()");
-	else if (op == WR_MEMSET)
-		VM_WARN_ONCE(memtst((void *)dst, (u8)src, len),
-			     "Failed wr_memset()");
-#endif
-	unuse_temporary_mm(prev);
-	local_irq_enable();
-	return (void *)dst;
-}
-
-#define TB (1UL << 40)
-
 struct mm_struct *copy_init_mm(void);
 void __init wr_poking_init(void)
 {
 	unsigned long start = (unsigned long)&__start_wr_after_init;
 	unsigned long end = (unsigned long)&__end_wr_after_init;
 	unsigned long i;
-	unsigned long wr_range;
 
 	wr_poking_mm = copy_init_mm();
 	if (WARN_ONCE(!wr_poking_mm, "No alternate mapping available."))
 		return;
-
-	wr_range = round_up(end - start, PAGE_SIZE);
-
-	/* Randomize the poking address base*/
-	wr_poking_base = TASK_UNMAPPED_BASE +
-		(kaslr_get_random_long("Write Rare Poking") & PAGE_MASK) %
-		(TASK_SIZE - (TASK_UNMAPPED_BASE + wr_range));
 
 	/*
 	 * Place 64TB of kernel address space within 128TB of user address
