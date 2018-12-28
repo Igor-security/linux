@@ -422,6 +422,15 @@ extern unsigned long __must_check __arch_copy_in_user(void __user *to, const voi
 #define INLINE_COPY_TO_USER
 #define INLINE_COPY_FROM_USER
 
+extern unsigned long __must_check __arch_memset_user(void __user *to, int c, unsigned long n);
+static inline unsigned long __must_check __memset_user(void __user *to, int c, unsigned long n)
+{
+	if (access_ok(VERIFY_WRITE, to, n))
+		n = __arch_memset_user(__uaccess_mask_ptr(to), c, n);
+	return n;
+}
+#define memset_user	__memset_user
+
 extern unsigned long __must_check __arch_clear_user(void __user *to, unsigned long n);
 static inline unsigned long __must_check __clear_user(void __user *to, unsigned long n)
 {
