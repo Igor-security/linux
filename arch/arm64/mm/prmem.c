@@ -29,8 +29,27 @@
 #include <asm/sections.h>
 #include <asm/uaccess.h>
 
-
 __ro_after_init struct mm_struct *wr_mm;
+/**
+ * __wr_enable() - activates the alternate mapping, for write rare
+ * @state: temporary storage for the mapping preceding the write rare
+ */
+void __wr_enable(wr_state_t *state)
+{
+	lockdep_assert_irqs_disabled();
+	state->prev = current->active_mm;
+	switch_mm_irqs_off(NULL, wr_mm, current);
+}
+
+/**
+ * __wr_disable() - restores the mapping preceding the write rare
+ * @state: temporary storage for the mapping preceding the write rare
+ */
+void __wr_disable(wr_state_t *state)
+{
+	lockdep_assert_irqs_disabled();
+	switch_mm_irqs_off(NULL, state->prev, current);
+}
 
 /*
  * The following two variables are statically allocated by the linker
@@ -40,32 +59,40 @@ __ro_after_init struct mm_struct *wr_mm;
 extern long __start_wr_after_init;
 extern long __end_wr_after_init;
 
+static bool __init __wr_map_address(unsigned long addr)
+{
+	spinlock_t *ptl;
+	pte_t pte;
+	pte_t *ptep;
+	unsigned long wr_addr;
+	struct page *page = virt_to_page(addr);
+
+	if (unlikely(!page))
+		return false;
+	wr_addr = (unsigned long)__wr_addr((void *)addr);
+
+	/* The lock is not needed, but avoids open-coding. */
+	ptep = get_locked_pte(wr_mm, wr_addr, &ptl);
+	if (unlikely(!ptep))
+		return false;
+
+	pte = mk_pte(page, PAGE_KERNEL);
+	set_pte_at(wr_mm, wr_addr, ptep, pte);
+	spin_unlock(ptl);
+	return true;
+}
+
 struct mm_struct *copy_init_mm(void);
 void __init wr_init(void)
 {
 	unsigned long start = (unsigned long)&__start_wr_after_init;
 	unsigned long end = (unsigned long)&__end_wr_after_init;
-	unsigned long i;
+	unsigned long addr;
 
 	wr_mm = copy_init_mm();
 	BUG_ON(!wr_mm);
 
 	/* Create alternate mapping for the entire wr_after_init range. */
-	for (i = start; i < end; i += PAGE_SIZE) {
-		struct page *page;
-		spinlock_t *ptl;
-		pte_t pte;
-		pte_t *ptep;
-
-		page = virt_to_page(i);
-		BUG_ON(!page);
-
-		/* The lock is not needed, but avoids open-coding. */
-		ptep = get_locked_pte(wr_mm, i, &ptl);
-		BUG_ON(!ptep);
-
-		pte = mk_pte(page, PAGE_KERNEL);
-		set_pte_at(wr_mm, i, ptep, pte);
-		spin_unlock(ptl);
-	}
+	for (addr = start; addr < end; addr += PAGE_SIZE)
+		BUG_ON(!__wr_map_address(addr));
 }

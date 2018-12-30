@@ -22,44 +22,15 @@
 
 typedef struct {
        struct mm_struct *prev;
-} temporary_mm_state_t;
+} wr_state_t;
 
-static inline temporary_mm_state_t use_temporary_mm(struct mm_struct *mm)
-{
-       temporary_mm_state_t state;
-
-       lockdep_assert_irqs_disabled();
-       state.prev = current->active_mm;
-       switch_mm_irqs_off(NULL, mm, current);
-       return state;
-}
-
-static inline void unuse_temporary_mm(temporary_mm_state_t prev)
-{
-       lockdep_assert_irqs_disabled();
-       switch_mm_irqs_off(NULL, prev.prev, current);
-}
-
-
-typedef temporary_mm_state_t wr_state_t;
-
-extern __ro_after_init struct mm_struct *wr_mm;
+void __wr_enable(wr_state_t *state);
+void __wr_disable(wr_state_t *state);
 
 static inline void *__wr_addr(void *addr)
 {
 	return addr;
 }
-
-static inline void __wr_enable(wr_state_t *state)
-{
-	*state = use_temporary_mm(wr_mm);
-}
-
-static inline void __wr_disable(wr_state_t *state)
-{
-	unuse_temporary_mm(*state);
-}
-
 
 /**
  * __wr_memset() - sets n bytes of the destination p to the c value
