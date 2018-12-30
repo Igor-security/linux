@@ -1,12 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * prmem.h: Header for memory protection library
+ * prmem.h: Header for memory protection library - generic part
  *
  * (C) Copyright 2018 Huawei Technologies Co. Ltd.
  * Author: Igor Stoppa <igor.stoppa@huawei.com>
- *
- * Support for:
- * - statically allocated write rare data
  */
 
 #ifndef _LINUX_PRMEM_H
@@ -18,14 +15,14 @@
 
 #ifndef CONFIG_PRMEM
 
-static inline void *wr_memset(void *p, int c, __kernel_size_t len)
+static inline void *wr_memset(void *p, int c, __kernel_size_t n)
 {
-	return memset(p, c, len);
+	return memset(p, c, n);
 }
 
-static inline void *wr_memcpy(void *p, const void *q, __kernel_size_t size)
+static inline void *wr_memcpy(void *p, const void *q, __kernel_size_t n)
 {
-	return memcpy(p, q, size);
+	return memcpy(p, q, n);
 }
 
 #define wr_assign(var, val)	((var) = (val))
@@ -33,15 +30,10 @@ static inline void *wr_memcpy(void *p, const void *q, __kernel_size_t size)
 
 #else
 
-#include <linux/string.h>
-#include <linux/slab.h>
 #include <linux/mm.h>
-#include <linux/vmalloc.h>
 
-#include <asm/prmem.h>
-
-void *wr_memset(void *p, int c, __kernel_size_t len);
-void *wr_memcpy(void *p, const void *q, __kernel_size_t size);
+void *wr_memset(void *p, int c, __kernel_size_t n);
+void *wr_memcpy(void *p, const void *q, __kernel_size_t n);
 
 /**
  * wr_assign() - sets a write-rare variable to a specified value
