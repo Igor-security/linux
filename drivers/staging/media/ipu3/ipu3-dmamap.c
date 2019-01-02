@@ -130,7 +130,8 @@ void *ipu3_dmamap_alloc(struct imgu_device *imgu, struct ipu3_css_map *map,
 	}
 
 	/* Now grab a virtual region */
-	map->vma = __get_vm_area(size, VM_USERMAP, VMALLOC_START, VMALLOC_END);
+	map->vma = __get_vm_area(size, VM_USERMAP,
+				 VMALLOC_START_RW, VMALLOC_END_RW);
 	if (!map->vma)
 		goto out_unmap;
 
