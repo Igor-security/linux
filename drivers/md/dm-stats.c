@@ -88,7 +88,7 @@ static bool __check_shared_memory(size_t alloc_size)
 	if (a >> PAGE_SHIFT > totalram_pages() / DM_STATS_MEMORY_FACTOR)
 		return false;
 #ifdef CONFIG_MMU
-	if (a > (VMALLOC_END - VMALLOC_START) / DM_STATS_VMALLOC_FACTOR)
+	if (a > VMALLOC_SIZE_RW / DM_STATS_VMALLOC_FACTOR)
 		return false;
 #endif
 	return true;
