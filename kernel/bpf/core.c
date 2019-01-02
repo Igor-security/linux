@@ -709,7 +709,7 @@ u64 __weak bpf_jit_alloc_exec_limit(void)
 #if defined(MODULES_VADDR)
 	return MODULES_END - MODULES_VADDR;
 #else
-	return VMALLOC_END - VMALLOC_START;
+	return VMALLOC_SIZE_RW;
 #endif
 }
 
