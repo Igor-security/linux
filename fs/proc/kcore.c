@@ -191,9 +191,9 @@ kclist_add_private(unsigned long pfn, unsigned long nr_pages, void *arg)
 	 * is a valid pointer, therefore we can check against it to determine
 	 * if we need to trim
 	 */
-	if (VMALLOC_START > ent->addr) {
-		if (VMALLOC_START - ent->addr < ent->size)
-			ent->size = VMALLOC_START - ent->addr;
+	if (VMALLOC_START_RW > ent->addr) {
+		if (VMALLOC_START_RW - ent->addr < ent->size)
+			ent->size = VMALLOC_START_RW - ent->addr;
 	}
 
 	ent->type = KCORE_RAM;
@@ -591,7 +591,7 @@ static void __init proc_kcore_text_init(void)
 struct kcore_list kcore_modules;
 static void __init add_modules_range(void)
 {
-	if (MODULES_VADDR != VMALLOC_START && MODULES_END != VMALLOC_END) {
+	if (MODULES_VADDR != VMALLOC_START_RW && MODULES_END != VMALLOC_END_RW) {
 		kclist_add(&kcore_modules, (void *)MODULES_VADDR,
 			MODULES_END - MODULES_VADDR, KCORE_VMALLOC);
 	}
@@ -613,8 +613,8 @@ static int __init proc_kcore_init(void)
 	/* Store text area if it's special */
 	proc_kcore_text_init();
 	/* Store vmalloc area */
-	kclist_add(&kcore_vmalloc, (void *)VMALLOC_START,
-		VMALLOC_END - VMALLOC_START, KCORE_VMALLOC);
+	kclist_add(&kcore_vmalloc, (void *)VMALLOC_START_RW,
+		VMALLOC_SIZE_RW, KCORE_VMALLOC);
 	add_modules_range();
 	/* Store direct-map area from physical memory map */
 	kcore_update_ram();

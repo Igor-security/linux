@@ -227,7 +227,7 @@ static unsigned long *alloc_thread_stack_node(struct task_struct *tsk, int node)
 	 * stacks to tasks. Drop __GFP_ACCOUNT.
 	 */
 	stack = __vmalloc_node_range(THREAD_SIZE, THREAD_ALIGN,
-				     VMALLOC_START, VMALLOC_END,
+				     VMALLOC_START_RW, VMALLOC_END_RW,
 				     THREADINFO_GFP & ~__GFP_ACCOUNT,
 				     PAGE_KERNEL,
 				     0, node, __builtin_return_address(0));
