@@ -859,7 +859,7 @@ static void *new_vmap_block(unsigned int order, gfp_t gfp_mask)
 		return ERR_PTR(-ENOMEM);
 
 	va = alloc_vmap_area(VMAP_BLOCK_SIZE, VMAP_BLOCK_SIZE,
-					VMALLOC_START, VMALLOC_END,
+					VMALLOC_START_RW, VMALLOC_END_RW,
 					node, gfp_mask);
 	if (IS_ERR(va)) {
 		kfree(vb);
@@ -1124,8 +1124,8 @@ void vm_unmap_ram(const void *mem, unsigned int count)
 
 	might_sleep();
 	BUG_ON(!addr);
-	BUG_ON(addr < VMALLOC_START);
-	BUG_ON(addr > VMALLOC_END);
+	BUG_ON(addr < VMALLOC_START_RW);
+	BUG_ON(addr > VMALLOC_END_RW);
 	BUG_ON(!PAGE_ALIGNED(addr));
 
 	if (likely(count <= VMAP_MAX_ALLOC)) {
@@ -1171,7 +1171,8 @@ void *vm_map_ram(struct page **pages, unsigned int count, int node, pgprot_t pro
 	} else {
 		struct vmap_area *va;
 		va = alloc_vmap_area(size, PAGE_SIZE,
-				VMALLOC_START, VMALLOC_END, node, GFP_KERNEL);
+				     VMALLOC_START_RW, VMALLOC_END_RW,
+				     node, GFP_KERNEL);
 		if (IS_ERR(va))
 			return NULL;
 
@@ -1230,8 +1231,8 @@ void __init vm_area_register_early(struct vm_struct *vm, size_t align)
 	static size_t vm_init_off __initdata;
 	unsigned long addr;
 
-	addr = ALIGN(VMALLOC_START + vm_init_off, align);
-	vm_init_off = PFN_ALIGN(addr + vm->size) - VMALLOC_START;
+	addr = ALIGN(VMALLOC_START_RW + vm_init_off, align);
+	vm_init_off = PFN_ALIGN(addr + vm->size) - VMALLOC_START_RW;
 
 	vm->addr = (void *)addr;
 
@@ -1431,7 +1432,8 @@ struct vm_struct *__get_vm_area_caller(unsigned long size, unsigned long flags,
  */
 struct vm_struct *get_vm_area(unsigned long size, unsigned long flags)
 {
-	return __get_vm_area_node(size, 1, flags, VMALLOC_START, VMALLOC_END,
+	return __get_vm_area_node(size, 1, flags,
+				  VMALLOC_START_RW, VMALLOC_END_RW,
 				  NUMA_NO_NODE, GFP_KERNEL,
 				  __builtin_return_address(0));
 }
@@ -1439,7 +1441,8 @@ struct vm_struct *get_vm_area(unsigned long size, unsigned long flags)
 struct vm_struct *get_vm_area_caller(unsigned long size, unsigned long flags,
 				const void *caller)
 {
-	return __get_vm_area_node(size, 1, flags, VMALLOC_START, VMALLOC_END,
+	return __get_vm_area_node(size, 1, flags,
+				  VMALLOC_START_RW, VMALLOC_END_RW,
 				  NUMA_NO_NODE, GFP_KERNEL, caller);
 }
 
@@ -1792,8 +1795,9 @@ static void *__vmalloc_node(unsigned long size, unsigned long align,
 			    gfp_t gfp_mask, pgprot_t prot,
 			    int node, const void *caller)
 {
-	return __vmalloc_node_range(size, align, VMALLOC_START, VMALLOC_END,
-				gfp_mask, prot, 0, node, caller);
+	return __vmalloc_node_range(size, align,
+				    VMALLOC_START_RW, VMALLOC_END_RW,
+				    gfp_mask, prot, 0, node, caller);
 }
 
 void *__vmalloc(unsigned long size, gfp_t gfp_mask, pgprot_t prot)
@@ -2471,7 +2475,7 @@ struct vm_struct **pcpu_get_vm_areas(const unsigned long *offsets,
 				     const size_t *sizes, int nr_vms,
 				     size_t align)
 {
-	const unsigned long vmalloc_start = ALIGN(VMALLOC_START, align);
+	const unsigned long vmalloc_start = ALIGN(VMALLOC_START_RW, align);
 	const unsigned long vmalloc_end = VMALLOC_END & ~(align - 1);
 	struct vmap_area **vas, *prev, *next;
 	struct vm_struct **vms;
