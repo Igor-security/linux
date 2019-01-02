@@ -197,11 +197,158 @@ pcpu_free_vm_areas(struct vm_struct **vms, int nr_vms)
 # endif
 #endif
 
-#ifdef CONFIG_MMU
-#define VMALLOC_TOTAL (VMALLOC_END - VMALLOC_START)
+
+/*
+ * The range of addresses for VMALLOC begins with the range reserved for
+ * VMALLOC_PRMEM allocations, followed by regular read/write allocations:
+ *
+ *	-------------	VMALLOC_START
+ *	VMALLOC_PRMEM
+ *	-------------	VMALLOC_RW_START
+ *	VMALLOC_RW
+ *	-------------	VMALLOC_END
+ *
+ *	VMALLOC_PRMEM is further subdivided into:
+ *	RO_NO_DESTROY: read-only allocations which become permanent till
+ *		       reboot, once they are write protected
+ *	RO_OK_DESTROY: read-only allocations which can be released, when
+ *		       their pool is destroyed.
+ *	WR_OK_DESTROY: write rare allocations which can be released, when
+ *		       their pool is destroyed.
+ *	WR_NO_DESTROY: write rare allocations which cannot be released,
+ *		       till reboot.
+ *
+ *
+ *	---------------------	VMALLOC_RO_NO_DESTROY_START
+ *	VMALLOC_RO_NO_DESTROY
+ *	---------------------	VMALLOC_RO_OK_DESTROY_START
+ *	VMALLOC_RO_OK_DESTROY
+ *	---------------------	VMALLOC_WR_OK_DESTROY_START
+ *	VMALLOC_WR_OK_DESTROY
+ *	---------------------	VMALLOC_WR_NO_DESTROY_START
+ *	VMALLOC_WR_NO_DESTROY
+ *	---------------------	VMALLOC_RW_START
+ *
+ * Such partitioning allows for inexpensive vetting of address ranges,
+ * when performing operations that might be exploited during an attack,
+ * such as modifying WR memory or destroying a destroyable allocation
+ * pool. Without this vetting, an ROP attack could attemtp to either alter
+ * data which is RO, or to destroy a pool that is not meant to be
+ * destroyed. This is particularly relevant when used in conjuntion with
+ * compilers providing CFI, so that the attack must rely primarily on
+ * invoking existing functions with maliciously crafted parameters.
+ * XXX NOTE: should the above explanation go elsewhere?
+ */
+
+/*
+ * XXX NOTE: the ranges below should be reworked, to be eventually
+ * compatible also with 32 bit systems, where vmalloc address space is far
+ * smaller. They will not cause problems as long as PRMEM is disabled.
+ * In practice the amount of data to protect should amount to few tens of
+ * megabytes. A major problem could be the IMA measurement list, because
+ * it grows indefinitely, but even without PRMEM, that *will* create an
+ * upper bound to uptime. A reasonable value for VMALLOC_WR_NO_DESTROY_SIZE
+ * should be determined.
+ */
+
+#ifdef CONFIG_PRMEM
+#define MB _BITUL(20)
+#define VMALLOC_RO_NO_DESTROY_SIZE round_up(128 * MB, PAGE_SIZE)
+#define VMALLOC_RO_OK_DESTROY_SIZE round_up(128 * MB, PAGE_SIZE)
+#define VMALLOC_WR_OK_DESTROY_SIZE round_up(128 * MB, PAGE_SIZE)
+#define VMALLOC_WR_NO_DESTROY_SIZE round_up(128 * MB, PAGE_SIZE)
 #else
-#define VMALLOC_TOTAL 0UL
+#define VMALLOC_RO_NO_DESTROY_SIZE 0UL
+#define VMALLOC_RO_OK_DESTROY_SIZE 0UL
+#define VMALLOC_WR_OK_DESTROY_SIZE 0UL
+#define VMALLOC_WR_NO_DESTROY_SIZE 0UL
 #endif
+
+#define VMALLOC_SIZE (VMALLOC_END - VMALLOC_START)
+#define VMALLOC_PRMEM_SIZE \
+	(VMALLOC_RO_NO_DESTROY_SIZE + VMALLOC_RO_OK_DESTROY_SIZE + \
+	 VMALLOC_WR_NO_DESTROY_SIZE + VMALLOC_WR_OK_DESTROY_SIZE)
+#define VMALLOC_RW_SIZE \
+	(VMALLOC_SIZE - VMALLOC_PRMEM_SIZE)
+
+#define VMALLOC_RO_NO_DESTROY_START VMALLOC_START
+#define VMALLOC_RO_NO_DESTROY_END	\
+	(VMALLOC_RO_NO_DESTROY_START + VMALLOC_RO_NO_DESTROY_SIZE)
+
+#define VMALLOC_RO_OK_DESTROY_START VMALLOC_RO_NO_DESTROY_END
+#define VMALLOC_RO_OK_DESTROY_END	\
+	(VMALLOC_RO_OK_DESTROY_START + VMALLOC_RO_OK_DESTROY_SIZE)
+
+#define VMALLOC_WR_OK_DESTROY_START VMALLOC_RO_OK_DESTROY_END
+#define VMALLOC_WR_OK_DESTROY_END \
+	(VMALLOC_WR_OK_DESTROY_START + VMALLOC_WR_OK_DESTROY_SIZE)
+
+#define VMALLOC_WR_NO_DESTROY_START VMALLOC_WR_OK_DESTROY_END
+#define VMALLOC_WR_NO_DESTROY_END \
+	(VMALLOC_WR_NO_DESTROY_START + VMALLOC_WR_NO_DESTROY_SIZE)
+
+#define VMALLOC_RW_START VMALLOC_WR_NO_DESTROY_END
+#define VMALLOC_RW_END VMALLOC_END
+
+#define is_vmalloc_ro_no_destroy(addr)		\
+({						\
+	unsigned long p = (unsigned long)addr;	\
+						\
+	((VMALLOC_RO_NO_DESTROY_START <= p) &&	\
+	 (VMALLOC_RO_NO_DESTROY_END > p));	\
+})
+
+#define is_vmalloc_ro_ok_destroy(addr)		\
+({						\
+	unsigned long p = (unsigned long)addr;	\
+						\
+	((VMALLOC_RO_OK_DESTROY_START <= p) &&	\
+	 (VMALLOC_RO_OK_DESTROY_END > p));	\
+})
+
+#define is_vmalloc_wr_ok_destroy(addr)		\
+({						\
+	unsigned long p = (unsigned long)addr;	\
+						\
+	((VMALLOC_WR_OK_DESTROY_START <= p) &&	\
+	 (VMALLOC_WR_NO_DESTROY_END > p));	\
+})
+
+#define is_vmalloc_wr_no_destroy(addr)		\
+({						\
+	unsigned long p = (unsigned long)addr;	\
+						\
+	((VMALLOC_WR_NO_DESTROY_START <= p) &&	\
+	 (VMALLOC_WR_NO_DESTROY_END > p));		\
+})
+
+#define is_vmalloc_ro(addr)						\
+({									\
+	unsigned long p = (unsigned long)addr;				\
+									\
+	(is_vmalloc_ro_ok_destroy(p) || is_vmalloc_ro_no_destroy(p));	\
+})
+
+#define is_vmalloc_wr(addr)						\
+({									\
+	unsigned long p = (unsigned long)addr;				\
+									\
+	(is_vmalloc_wr_ok_destroy(p) || is_vmalloc_wr_no_destroy(p));	\
+})
+
+#define is_vmalloc_ok_destroy(addr)					\
+({									\
+	unsigned long p = (unsigned long)addr;				\
+									\
+	is_vmalloc_ro_ok_destroy(p) || is_vmalloc_wr_ok_destroy(p);		\
+})
+
+#define is_vmalloc_no_destroy(addr)					\
+({									\
+	unsigned long p = (unsigned long)addr;				\
+									\
+	(is_vmalloc_ro_no_destroy(p) || is_vmalloc_wr_no_destroy(p));	\
+})
 
 int register_vmap_purge_notifier(struct notifier_block *nb);
 int unregister_vmap_purge_notifier(struct notifier_block *nb);
