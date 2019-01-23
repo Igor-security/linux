@@ -53,7 +53,7 @@ EXPORT_SYMBOL(__memset_user);
 
 unsigned long memset_user(void __user *to, int c, unsigned long n)
 {
-	if (access_ok(VERIFY_WRITE, to, n))
+	if (access_ok(to, n))
 		return __memset_user(to, c, n);
 	return n;
 }
